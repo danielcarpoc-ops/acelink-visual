@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List } from 'lucide-react';
+import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List, Loader2 } from 'lucide-react';
 
 // Helper function to clean channel names
 const cleanChannelName = (name: string): string => {
@@ -42,6 +42,7 @@ const TelegramTab = ({
   const [code, setCode] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [phoneCodeHash, setPhoneCodeHash] = useState('');
   const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>('event');
   const [searchQuery, setSearchQuery] = useState('');
@@ -107,6 +108,7 @@ const TelegramTab = ({
     const res = await sendCommand('fetch_channels');
     if (res.status === 'success') {
       setChannels(res.data);
+      setIsInitialLoading(false);
     } else {
       setStatusMsg(res.message || 'Error al obtener canales');
     }
@@ -297,7 +299,15 @@ const TelegramTab = ({
         </div>
       )}
 
-      {channels.length === 0 ? (
+      {/* Loading spinner */}
+      {(isLoading || isInitialLoading) && (
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className={`w-10 h-10 animate-spin ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+          <p className={`mt-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Cargando canales...</p>
+        </div>
+      )}
+
+      {!isLoading && !isInitialLoading && channels.length === 0 ? (
         <div className={`text-center py-20 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
           <p>Aún no se han encontrado streams.</p>
           <button onClick={fetchChannels} className="text-blue-400 mt-2 underline">Intentar escanear ahora</button>

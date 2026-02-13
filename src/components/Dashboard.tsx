@@ -8,7 +8,8 @@ import {
   Settings, 
   Cast,
   Circle,
-  Square
+  Square,
+  Loader2
 } from 'lucide-react';
 import Hls from 'hls.js';
 
@@ -443,6 +444,14 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
           <Square size={16} />
           Detener
         </button>
+      )}
+
+      {/* Loading spinner */}
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className={`w-10 h-10 animate-spin ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+          <p className={`mt-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{status || 'Cargando stream...'}</p>
+        </div>
       )}
 
       {/* Player Section */}
