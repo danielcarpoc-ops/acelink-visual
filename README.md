@@ -7,10 +7,12 @@ A modern, visual desktop application for Ace Stream playback on macOS.
 - **Embedded Player:** Try to play streams directly within the app.
 - **VLC Integration:** One-click fallback to open streams in VLC.
 - **Automatic Engine Management:** Handles the Docker container in the background.
+- **Telegram Integration:** Connect your Telegram account to scan channels and live events from groups like "Deportes AceStream".
 
 ## Prerequisites
 - **Docker Desktop** must be installed and running.
 - **VLC** (optional but recommended for best compatibility).
+- **Python 3** (installed on system) for Telegram integration.
 
 ## Installation
 
@@ -43,3 +45,4 @@ npx electron-builder
 ## Troubleshooting
 - If the stream doesn't load in the embedded player, click the "Open External" button or the icon in the top right of the player to open in VLC.
 - Ensure Docker is running before starting the app.
+- For Telegram: You need an API ID and Hash from [my.telegram.org](https://my.telegram.org).
