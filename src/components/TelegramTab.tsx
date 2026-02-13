@@ -4,9 +4,10 @@ import { Send, Phone, RefreshCw, Play } from 'lucide-react';
 // Helper function to clean channel names
 const cleanChannelName = (name: string): string => {
   if (!name) return '';
-  // Remove special characters, keep only letters, numbers, and spaces
+  // Remove special characters (keep letters including accented, numbers, and spaces)
+  // \p{L} matches any kind of letter from any language (including accented)
   return name
-    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
     .replace(/\s+/g, ' ')
     .trim();
 };
@@ -164,9 +165,7 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
   return (
     <div className="max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <Send className="text-blue-400" /> Telegram
-        </h2>
+        <div></div>
         
         <div className="flex bg-[#333] rounded-lg p-1">
              <button 
