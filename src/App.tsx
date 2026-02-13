@@ -44,8 +44,17 @@ function App() {
         setActiveTab('dashboard');
     };
     
+    // Listen for going back to channels
+    const handleGoToChannels = () => {
+        setActiveTab('telegram');
+    };
+    
     window.addEventListener('play-stream', handlePlayStream);
-    return () => window.removeEventListener('play-stream', handlePlayStream);
+    window.addEventListener('go-to-channels', handleGoToChannels);
+    return () => {
+      window.removeEventListener('play-stream', handlePlayStream);
+      window.removeEventListener('go-to-channels', handleGoToChannels);
+    };
   }, []);
 
   // Reset pending stream when switching to dashboard tab manually

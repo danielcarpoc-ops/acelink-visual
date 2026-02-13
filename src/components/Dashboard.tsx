@@ -425,7 +425,7 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
         </div>
       )}
 
-      {/* Stop button - Show when playing */}
+      {/* Back button - Show when playing */}
       {isPlaying && (
         <button 
           onClick={() => {
@@ -438,11 +438,11 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
               hlsRef.current.destroy();
               hlsRef.current = null;
             }
+            window.dispatchEvent(new CustomEvent('go-to-channels'));
           }}
-          className="mb-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          className="mb-4 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
         >
-          <Square size={16} />
-          Detener
+          ← Volver a Canales
         </button>
       )}
 
