@@ -1,14 +1,34 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, ExternalLink, Tv, RefreshCw, PictureInPicture, Monitor, Settings } from 'lucide-react';
+import { 
+  Play, 
+  ExternalLink, 
+  Tv, 
+  RefreshCw, 
+  PictureInPicture, 
+  Monitor, 
+  Settings, 
+  Cast,
+  Circle,
+  Square
+} from 'lucide-react';
 import Hls from 'hls.js';
 
 interface DashboardProps {
   initialStreamId?: string;
 }
 
+// Cast SDK types
+declare global {
+  interface Window {
+    cast?: any;
+    chrome?: any;
+  }
+}
+
 const Dashboard = ({ initialStreamId }: DashboardProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const retryCountRef = useRef(0);
   const maxRetries = 3;
   
@@ -23,12 +43,22 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
   
   // Quality selector state
   const [qualityLevels, setQualityLevels] = useState<{level: number; height: number; width: number}[]>([]);
-  const [currentQuality, setCurrentQuality] = useState<number>(-1); // -1 = Auto
+  const [currentQuality, setCurrentQuality] = useState<number>(-1);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   
   // PiP and Always on Top state
   const [isPiPActive, setIsPiPActive] = useState(false);
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false);
+  
+  // Chromecast state
+  const [isCastAvailable, setIsCastAvailable] = useState(false);
+  const [isCasting, setIsCasting] = useState(false);
+  const castContextRef = useRef<any>(null);
+  
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (initialStreamId) {
@@ -38,6 +68,41 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
     }
   }, [initialStreamId]);
 
+  // Initialize Cast SDK
+  useEffect(() => {
+    const initializeCast = () => {
+      if (window.cast && window.chrome && window.chrome.cast) {
+        const castContext = window.cast.framework.CastContext.getInstance();
+        castContext.setOptions({
+          receiverApplicationId: window.chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+          autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+        });
+        
+        castContextRef.current = castContext;
+        
+        // Listen for cast state changes
+        castContext.addEventListener(
+          window.cast.framework.CastContextEventType.CAST_STATE_CHANGED,
+          (event: any) => {
+            setIsCasting(event.castState === window.cast.framework.CastState.CONNECTED);
+          }
+        );
+        
+        setIsCastAvailable(true);
+      }
+    };
+
+    // Load Cast SDK
+    if (!window.cast) {
+      const script = document.createElement('script');
+      script.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+      script.onload = initializeCast;
+      document.body.appendChild(script);
+    } else {
+      initializeCast();
+    }
+  }, []);
+
   // Retry function
   const handleRetry = useCallback(() => {
     if (retryCountRef.current < maxRetries) {
@@ -46,16 +111,13 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
       setIsRetrying(true);
       setStatus(`Reconectando ${retryCountRef.current}/${maxRetries}...`);
       
-      // Destroy current HLS instance
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
       
-      // Wait 2 seconds before retrying
       setTimeout(() => {
         setIsRetrying(false);
-        // Trigger useEffect by updating streamUrl
         setStreamUrl(prev => prev + '?retry=' + Date.now());
       }, 2000);
     } else {
@@ -67,7 +129,6 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
   // Initialize HLS player when stream URL changes
   useEffect(() => {
     if (isPlaying && streamUrl && videoRef.current) {
-      // Clean up previous HLS instance
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -78,23 +139,19 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
       setRetryCount(0);
 
       if (Hls.isSupported()) {
-        console.log('HLS.js is supported, creating player...');
-        
         hlsRef.current = new Hls({
           debug: false,
           enableWorker: true,
           lowLatencyMode: true,
           maxBufferLength: 30,
           maxMaxBufferLength: 60,
-          startLevel: -1, // Auto quality selection
+          startLevel: -1,
         });
 
         hlsRef.current.loadSource(streamUrl);
         hlsRef.current.attachMedia(video);
 
-        // Track quality levels
         hlsRef.current.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-          console.log('HLS manifest parsed, levels:', data.levels);
           setQualityLevels(data.levels.map((level, idx) => ({
             level: idx,
             height: level.height,
@@ -109,9 +166,7 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
           });
         });
 
-        hlsRef.current.on(Hls.Events.ERROR, (event, data) => {
-          console.error('HLS Error:', event, data);
-          
+        hlsRef.current.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
@@ -144,7 +199,6 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
         });
 
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        console.log('Using native HLS support');
         video.src = streamUrl;
         setStatus('Reproducción nativa');
       } else {
@@ -181,7 +235,6 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
       
       const proxyUrl = await window.electronAPI.getProxyUrl(cleanId);
       const hlsUrl = proxyUrl.replace('/stream?', '/manifest.m3u8?');
-      console.log('HLS Stream URL:', hlsUrl);
       setStreamUrl(hlsUrl);
       
       setStatus('Esperando al motor de Ace Stream...');
@@ -191,7 +244,6 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
       setLoading(false);
 
     } catch (err: any) {
-      console.error('Play Error:', err);
       setError(`Error al obtener el stream: ${err.message}`);
       setLoading(false);
       setStatus('Error');
@@ -204,7 +256,6 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
     await window.electronAPI.openVlc(url);
   };
 
-  // Quality selection handler
   const handleQualityChange = (level: number) => {
     if (hlsRef.current) {
       hlsRef.current.currentLevel = level;
@@ -213,7 +264,6 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
     }
   };
 
-  // Picture-in-Picture toggle
   const togglePiP = async () => {
     if (!videoRef.current) return;
     
@@ -230,7 +280,6 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
     }
   };
 
-  // Listen for PiP changes
   useEffect(() => {
     const handleEnterPiP = () => setIsPiPActive(true);
     const handleLeavePiP = () => setIsPiPActive(false);
@@ -244,7 +293,6 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
     };
   }, []);
 
-  // Always on Top toggle
   const toggleAlwaysOnTop = async () => {
     try {
       const newState = !isAlwaysOnTop;
@@ -253,6 +301,92 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
     } catch (err) {
       console.error('Always on Top error:', err);
     }
+  };
+
+  // Chromecast functions
+  const toggleCast = async () => {
+    if (!castContextRef.current) return;
+    
+    try {
+      if (isCasting) {
+        castContextRef.current.endCurrentSession(true);
+      } else {
+        await castContextRef.current.requestSession();
+        
+        // Load media after connecting
+        if (streamUrl) {
+          const mediaInfo = new window.chrome.cast.media.MediaInfo(streamUrl, 'application/x-mpegURL');
+          const request = new window.chrome.cast.media.LoadRequest(mediaInfo);
+          
+          const session = castContextRef.current.getCurrentSession();
+          await session.loadMedia(request);
+        }
+      }
+    } catch (err) {
+      console.error('Cast error:', err);
+    }
+  };
+
+  // Recording functions
+  const startRecording = async () => {
+    if (!videoRef.current) return;
+    
+    try {
+      const stream = (videoRef.current as any).captureStream();
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9,opus'
+      });
+      
+      const chunks: Blob[] = [];
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ace-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+      
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start(1000);
+      setIsRecording(true);
+      
+      // Start timer
+      setRecordingTime(0);
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
+    } catch (err) {
+      console.error('Recording error:', err);
+      alert('Error al iniciar la grabación');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -318,6 +452,14 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
             </div>
           )}
 
+          {/* Recording indicator */}
+          {isRecording && (
+            <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 px-3 py-1 rounded-lg z-10">
+              <Circle className="w-3 h-3 fill-white animate-pulse" />
+              <span className="text-white text-sm font-medium">{formatTime(recordingTime)}</span>
+            </div>
+          )}
+
           {/* Retry button when error */}
           {retryCount >= maxRetries && !isRetrying && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-20">
@@ -343,6 +485,26 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
            
            {/* Overlay Controls */}
            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+              {/* Recording Button */}
+              <button 
+                onClick={isRecording ? stopRecording : startRecording}
+                className={`p-2 rounded-lg transition-colors ${isRecording ? 'bg-red-600 text-white animate-pulse' : 'bg-black/50 backdrop-blur-md text-white hover:bg-white/20'}`}
+                title={isRecording ? 'Detener grabación' : 'Grabar'}
+              >
+                {isRecording ? <Square size={18} /> : <Circle size={18} className="fill-red-500" />}
+              </button>
+
+              {/* Chromecast */}
+              {isCastAvailable && (
+                <button 
+                  onClick={toggleCast}
+                  className={`p-2 rounded-lg transition-colors ${isCasting ? 'bg-blue-600 text-white' : 'bg-black/50 backdrop-blur-md text-white hover:bg-white/20'}`}
+                  title={isCasting ? 'Desconectar Chromecast' : 'Enviar a TV (Chromecast)'}
+                >
+                  <Cast size={18} />
+                </button>
+              )}
+
               {/* Quality Selector */}
               {qualityLevels.length > 0 && (
                 <div className="relative">
