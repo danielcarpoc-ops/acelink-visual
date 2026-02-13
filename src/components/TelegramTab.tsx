@@ -1,6 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Send, Phone, RefreshCw, Play } from 'lucide-react';
 
+// Helper function to clean channel names
+const cleanChannelName = (name: string): string => {
+  if (!name) return '';
+  // Remove special characters, keep only letters, numbers, and spaces
+  return name
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 interface TelegramTabProps {
   phone: string;
   setPhone: (p: string) => void;
@@ -195,7 +205,7 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
           )}
           {filteredChannels.map((ch, idx) => (
             <div key={idx} className="bg-[#242424] p-4 rounded-xl border border-[#333] hover:border-blue-500/50 transition-all group">
-              <h3 className="font-bold text-lg mb-1 truncate">{ch.name}</h3>
+              <h3 className="font-bold text-lg mb-1 truncate">{cleanChannelName(ch.name)}</h3>
               <p className="text-xs text-gray-500 mb-4 font-mono truncate">{ch.id}</p>
               
               <button 
