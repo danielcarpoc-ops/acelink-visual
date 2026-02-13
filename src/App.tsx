@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, Play, Send } from 'lucide-react';
+import { Activity, Play, Tv } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import TelegramTab from './components/TelegramTab';
 
@@ -50,16 +50,18 @@ function App() {
         
         <nav className="flex flex-col gap-4 w-full items-center no-drag">
           <button 
-            onClick={() => setActiveTab('dashboard')}
-            className={`p-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-[#333] text-blue-400' : 'text-gray-400 hover:text-white'}`}
-          >
-            <Play size={24} />
-          </button>
-          <button 
             onClick={() => setActiveTab('telegram')}
             className={`p-3 rounded-xl transition-all ${activeTab === 'telegram' ? 'bg-[#333] text-blue-400' : 'text-gray-400 hover:text-white'}`}
+            title="Channels"
           >
-            <Send size={24} />
+            <Tv size={24} />
+          </button>
+          <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={`p-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-[#333] text-blue-400' : 'text-gray-400 hover:text-white'}`}
+            title="Player"
+          >
+            <Play size={24} />
           </button>
         </nav>
 
