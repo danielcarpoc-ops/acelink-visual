@@ -300,7 +300,7 @@ const TelegramTab = ({
       )}
 
       {/* Loading spinner */}
-      {(isLoading || isInitialLoading) && (
+      {(isLoading || (isInitialLoading && channels.length === 0)) && (
         <div className="flex flex-col items-center justify-center py-20">
           <Loader2 className={`w-10 h-10 animate-spin ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
           <p className={`mt-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Cargando canales...</p>
