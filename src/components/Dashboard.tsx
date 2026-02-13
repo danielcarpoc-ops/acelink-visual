@@ -1,65 +1,148 @@
-import { useState, useEffect } from 'react';
-import ReactPlayer from 'react-player';
-import { Play, ExternalLink, Copy, Tv } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Play, ExternalLink, Tv } from 'lucide-react';
+import Hls from 'hls.js';
 
 interface DashboardProps {
   initialStreamId?: string;
 }
 
 const Dashboard = ({ initialStreamId }: DashboardProps) => {
-  const Player = ReactPlayer as any;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const [streamId, setStreamId] = useState(initialStreamId || '');
   const [isPlaying, setIsPlaying] = useState(false);
   const [streamUrl, setStreamUrl] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<string>('');
 
   useEffect(() => {
     if (initialStreamId) {
         setStreamId(initialStreamId);
-        // Clean and play
         const cleanId = initialStreamId.replace('acestream://', '').trim();
         setTimeout(() => handlePlay(cleanId), 100);
     }
   }, [initialStreamId]);
 
+  // Initialize HLS player when stream URL changes
+  useEffect(() => {
+    if (isPlaying && streamUrl && videoRef.current) {
+      // Clean up previous HLS instance
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+
+      const video = videoRef.current;
+
+      if (Hls.isSupported()) {
+        console.log('HLS.js is supported, creating player...');
+        
+        hlsRef.current = new Hls({
+          debug: false,
+          enableWorker: true,
+          lowLatencyMode: true,
+          maxBufferLength: 30,
+          maxMaxBufferLength: 60,
+        });
+
+        hlsRef.current.loadSource(streamUrl);
+        hlsRef.current.attachMedia(video);
+
+        hlsRef.current.on(Hls.Events.MANIFEST_PARSED, () => {
+          console.log('HLS manifest parsed, starting playback...');
+          setStatus('Buffering...');
+          video.play().catch(err => {
+            console.log('Auto-play prevented:', err);
+            setStatus('Click play to start');
+          });
+        });
+
+        hlsRef.current.on(Hls.Events.ERROR, (event, data) => {
+          console.error('HLS Error:', event, data);
+          
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                setStatus('Network error - retrying...');
+                hlsRef.current?.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                setStatus('Media error - recovering...');
+                hlsRef.current?.recoverMediaError();
+                break;
+              default:
+                setStatus('Fatal error - use VLC');
+                setError('Stream error. Try opening in VLC for better compatibility.');
+                break;
+            }
+          }
+        });
+
+        hlsRef.current.on(Hls.Events.FRAG_LOADED, () => {
+          setStatus('Playing');
+        });
+
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        console.log('Using native HLS support');
+        video.src = streamUrl;
+        setStatus('Native playback');
+      } else {
+        setError('Your browser does not support HLS playback');
+        setStatus('Not supported');
+      }
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [isPlaying, streamUrl]);
+
   const handlePlay = async (overrideId?: string) => {
-    // If called via button click, overrideId is undefined (event object)
-    // If called via effect, it is a string
     const targetId = (typeof overrideId === 'string' ? overrideId : streamId);
     
     if (!targetId) return;
     setLoading(true);
     setError('');
+    setStatus('Initializing...');
     setIsPlaying(false);
 
-    // Sanitize ID: Remove 'acestream://' if present
     const cleanId = targetId.replace('acestream://', '').trim();
 
     try {
       if (!window.electronAPI) {
         throw new Error('Electron API not available');
       }
-      const url = await window.electronAPI.getStreamUrl(cleanId);
-      console.log('Stream URL:', url);
-      setStreamUrl(url);
       
-      // Give the engine a moment to resolve the stream (Ace Stream takes time)
-      setTimeout(() => {
-        setIsPlaying(true);
-        setLoading(false);
-      }, 2000); 
+      // Get proxy URL - we'll use the manifest endpoint for HLS
+      const proxyUrl = await window.electronAPI.getProxyUrl(cleanId);
+      // Replace the URL to use manifest.m3u8 instead of getstream
+      const hlsUrl = proxyUrl.replace('/stream?', '/manifest.m3u8?');
+      console.log('HLS Stream URL:', hlsUrl);
+      setStreamUrl(hlsUrl);
+      
+      // Wait for engine to buffer
+      setStatus('Waiting for Ace Stream engine...');
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      setIsPlaying(true);
+      setLoading(false);
 
     } catch (err: any) {
       console.error('Play Error:', err);
-      setError(`Failed to get stream URL: ${err.message || err}`);
+      setError(`Failed to get stream: ${err.message}`);
       setLoading(false);
+      setStatus('Error');
     }
   };
 
   const openVLC = async () => {
-    if (!streamUrl && !streamId) return;
-    const url = streamUrl || await window.electronAPI.getStreamUrl(streamId);
+    if (!streamId) return;
+    const url = await window.electronAPI.getStreamUrl(streamId);
     await window.electronAPI.openVlc(url);
   };
 
@@ -89,54 +172,85 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
             {loading ? 'Loading...' : <><Play size={18} /> Play</>}
           </button>
         </div>
-        {error && <p className="text-red-500 mt-2 text-sm">{error}</p>}
+        
+        {error && (
+          <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <p className="text-red-400 text-sm mb-2">{error}</p>
+            <button 
+              onClick={openVLC}
+              className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              <ExternalLink size={16} />
+              Open in VLC
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Player Section */}
       {isPlaying && (
         <div className="bg-black rounded-2xl overflow-hidden shadow-2xl aspect-video relative group">
-           <Player 
-             url={streamUrl} 
-             playing={true}
-             controls={true}
-             width="100%"
-             height="100%"
-             onError={(e: any) => {
-               console.error('Player Error:', e);
-               setError('Playback error. Try opening in VLC.');
-             }}
-           />
+          <video
+            ref={videoRef}
+            controls
+            playsInline
+            muted
+            className="w-full h-full"
+            style={{ objectFit: 'contain' }}
+          />
+          
+          {/* Status overlay */}
+          {status && status !== 'Playing' && (
+            <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-sm text-gray-300">
+              {status}
+            </div>
+          )}
            
            {/* Overlay Controls */}
-           <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+           <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+              <button 
+                onClick={() => {
+                  if (videoRef.current) {
+                    videoRef.current.muted = !videoRef.current.muted;
+                  }
+                }}
+                className="bg-black/50 backdrop-blur-md p-2 rounded-lg text-white hover:bg-white/20 transition-colors"
+                title="Toggle Mute"
+              >
+                {videoRef.current?.muted ? '🔇' : '🔊'}
+              </button>
               <button 
                 onClick={openVLC}
-                className="bg-black/50 backdrop-blur-md p-2 rounded-lg text-white hover:bg-white/20 transition-colors"
+                className="bg-orange-600 hover:bg-orange-700 text-white p-2 rounded-lg transition-colors flex items-center gap-2 shadow-lg"
                 title="Open in VLC"
               >
-                <ExternalLink size={20} />
+                <ExternalLink size={18} />
+                <span className="text-sm font-medium">VLC</span>
               </button>
            </div>
         </div>
       )}
 
-      {/* Empty State / Hints */}
+      {/* Empty State */}
       {!isPlaying && !loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-[#242424] p-6 rounded-2xl border border-[#333] hover:border-[#444] transition-colors cursor-pointer" onClick={openVLC}>
-            <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center mb-4">
+          <div 
+            className="bg-[#242424] p-6 rounded-2xl border border-[#333] hover:border-orange-500/50 transition-colors cursor-pointer group"
+            onClick={openVLC}
+          >
+            <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center mb-4 group-hover:bg-orange-500/20 transition-colors">
               <ExternalLink className="text-orange-500" size={24} />
             </div>
-            <h3 className="text-xl font-semibold mb-2">Open External</h3>
-            <p className="text-gray-400 text-sm">Use VLC or another player for better compatibility with raw streams.</p>
+            <h3 className="text-xl font-semibold mb-2 text-orange-400">Open in VLC</h3>
+            <p className="text-gray-400 text-sm">Best compatibility with all Ace Stream channels and codecs.</p>
           </div>
 
-           <div className="bg-[#242424] p-6 rounded-2xl border border-[#333]">
-            <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center mb-4">
-              <Copy className="text-green-500" size={24} />
+          <div className="bg-[#242424] p-6 rounded-2xl border border-[#333]">
+            <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center mb-4">
+              <Play className="text-blue-500" size={24} />
             </div>
-            <h3 className="text-xl font-semibold mb-2">From Clipboard</h3>
-            <p className="text-gray-400 text-sm">Paste directly from your clipboard to start watching instantly.</p>
+            <h3 className="text-xl font-semibold mb-2">Built-in Player</h3>
+            <p className="text-gray-400 text-sm">Uses HLS streaming for better browser compatibility.</p>
           </div>
         </div>
       )}

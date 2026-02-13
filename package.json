@@ -11,7 +11,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "flv.js": "^1.6.2",
+    "hls.js": "^1.6.15",
     "lucide-react": "^0.563.0",
+    "mpegts.js": "^1.8.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-player": "^3.4.0"

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, Play, List, Settings, Send } from 'lucide-react';
+import { Activity, Play, Settings, Send } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import TelegramTab from './components/TelegramTab';
 
