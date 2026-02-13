@@ -396,31 +396,54 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
         Reproductor de Streams
       </h2>
 
-      {/* Input Section */}
-      <div className={`p-6 rounded-2xl mb-8 shadow-lg ${isDarkMode ? 'bg-[#242424]' : 'bg-white'}`}>
-        <label className={`block text-sm mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>ID de Ace Stream</label>
-        <input 
-          type="text" 
-          value={streamId}
-          onChange={(e) => setStreamId(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && streamId && handlePlay()}
-          placeholder="ej. 23894723847238947..."
-          className={`w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] border-[#333] text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
-        />
-        
-        {error && (
-          <div className={`mt-3 p-3 rounded-lg ${isDarkMode ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
-            <p className="text-red-400 text-sm mb-2">{error}</p>
-            <button 
-              onClick={openVLC}
-              className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-            >
-              <ExternalLink size={16} />
-              Abrir en VLC
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Input Section - Hide when playing */}
+      {!isPlaying && (
+        <div className={`p-6 rounded-2xl mb-8 shadow-lg ${isDarkMode ? 'bg-[#242424]' : 'bg-white'}`}>
+          <label className={`block text-sm mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>ID de Ace Stream</label>
+          <input 
+            type="text" 
+            value={streamId}
+            onChange={(e) => setStreamId(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && streamId && handlePlay()}
+            placeholder="ej. 23894723847238947..."
+            className={`w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] border-[#333] text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
+          />
+          
+          {error && (
+            <div className={`mt-3 p-3 rounded-lg ${isDarkMode ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
+              <p className="text-red-400 text-sm mb-2">{error}</p>
+              <button 
+                onClick={openVLC}
+                className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <ExternalLink size={16} />
+                Abrir en VLC
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stop button - Show when playing */}
+      {isPlaying && (
+        <button 
+          onClick={() => {
+            setIsPlaying(false);
+            setStreamId('');
+            setStreamUrl('');
+            setError('');
+            setStatus('');
+            if (hlsRef.current) {
+              hlsRef.current.destroy();
+              hlsRef.current = null;
+            }
+          }}
+          className="mb-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+        >
+          <Square size={16} />
+          Detener
+        </button>
+      )}
 
       {/* Player Section */}
       {isPlaying && (

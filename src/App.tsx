@@ -48,6 +48,13 @@ function App() {
     return () => window.removeEventListener('play-stream', handlePlayStream);
   }, []);
 
+  // Reset pending stream when switching to dashboard tab manually
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      setPendingStream(null);
+    }
+  }, [activeTab]);
+
   useEffect(() => {
     const checkStatus = async () => {
       const status = await window.electronAPI.checkDockerStatus();
