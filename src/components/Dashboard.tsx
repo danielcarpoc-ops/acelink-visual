@@ -549,19 +549,6 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
                 <Monitor size={18} />
               </button>
               
-              {/* Mute */}
-              <button 
-                onClick={() => {
-                  if (videoRef.current) {
-                    videoRef.current.muted = !videoRef.current.muted;
-                  }
-                }}
-                className="bg-black/50 backdrop-blur-md p-2 rounded-lg text-white hover:bg-white/20 transition-colors"
-                title="Silenciar/Activar sonido"
-              >
-                {videoRef.current?.muted ? '🔇' : '🔊'}
-              </button>
-
               {/* VLC */}
               <button 
                 onClick={openVLC}

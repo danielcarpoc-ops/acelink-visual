@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List, ArrowUpDown, Tv } from 'lucide-react';
+import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List, ArrowUpDown } from 'lucide-react';
 
 // Helper function to clean channel names
 const cleanChannelName = (name: string): string => {
@@ -227,11 +227,6 @@ const TelegramTab = ({
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h2 className={`text-3xl font-bold mb-6 flex items-center gap-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-        <Tv className="text-blue-500" />
-        Canales de Telegram
-      </h2>
-      
       <div className="flex justify-between items-center mb-6">
         <div></div>
         
