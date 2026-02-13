@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, Play, Tv } from 'lucide-react';
+import { Activity, Play, Tv, Sun, Moon, Type } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import TelegramTab from './components/TelegramTab';
 
@@ -7,6 +7,35 @@ function App() {
   const [engineStatus, setEngineStatus] = useState<string>('checking');
   const [activeTab, setActiveTab] = useState('telegram');
   const [pendingStream, setPendingStream] = useState<string | null>(null);
+  
+  // Theme state
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem('theme') !== 'light';
+  });
+  
+  // Font size state
+  const [fontSize, setFontSize] = useState<'small' | 'normal' | 'large'>(() => {
+    return (localStorage.getItem('fontSize') as 'small' | 'normal' | 'large') || 'normal';
+  });
+  
+  // Persist theme
+  useEffect(() => {
+    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+  
+  // Persist font size
+  useEffect(() => {
+    localStorage.setItem('fontSize', fontSize);
+    document.documentElement.style.fontSize = 
+      fontSize === 'small' ? '14px' : fontSize === 'large' ? '18px' : '16px';
+  }, [fontSize]);
 
   useEffect(() => {
     // Listen for play requests from other tabs
@@ -122,8 +151,48 @@ function App() {
           >
             <Play size={24} />
           </button>
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={`p-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-[#333] text-blue-400' : 'text-gray-400 hover:text-white'}`}
+            title="Configuración"
+          >
+            <Type size={24} />
+          </button>
         </nav>
 
+        {/* Theme and Font Size Controls */}
+        <div className="mt-auto mb-4 flex flex-col gap-2">
+          <button 
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="p-2 rounded-lg bg-[#333] hover:bg-[#444] text-gray-400 hover:text-white transition-colors"
+            title={isDarkMode ? 'Modo claro' : 'Modo oscuro'}
+          >
+            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          <div className="flex flex-col gap-1 bg-[#333] rounded-lg p-1">
+            <button 
+              onClick={() => setFontSize('small')}
+              className={`text-xs px-2 py-1 rounded ${fontSize === 'small' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+              title="Texto pequeño"
+            >
+              A
+            </button>
+            <button 
+              onClick={() => setFontSize('normal')}
+              className={`text-sm px-2 py-1 rounded ${fontSize === 'normal' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+              title="Texto normal"
+            >
+              A
+            </button>
+            <button 
+              onClick={() => setFontSize('large')}
+              className={`text-base px-2 py-1 rounded ${fontSize === 'large' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+              title="Texto grande"
+            >
+              A
+            </button>
+          </div>
+        </div>
 
       </div>
 
@@ -141,7 +210,7 @@ function App() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className={`flex-1 overflow-auto p-6 ${isDarkMode ? 'bg-[#1a1a1a] text-white' : 'bg-gray-100 text-gray-900'}`}>
           {activeTab === 'dashboard' && <Dashboard initialStreamId={pendingStream || undefined} />}
           {activeTab === 'telegram' && (
             <TelegramTab 
@@ -156,6 +225,54 @@ function App() {
               isFavorite={isFavorite}
               getFavoriteMatches={getFavoriteMatches}
             />
+          )}
+          {activeTab === 'settings' && (
+            <div className="max-w-2xl mx-auto">
+              <h2 className="text-3xl font-bold mb-6">Configuración</h2>
+              
+              <div className="space-y-6">
+                <div className={`p-6 rounded-2xl shadow-lg ${isDarkMode ? 'bg-[#242424]' : 'bg-white'}`}>
+                  <h3 className="text-xl font-semibold mb-4">Apariencia</h3>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span>Tema</span>
+                      <button 
+                        onClick={() => setIsDarkMode(!isDarkMode)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                      >
+                        {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+                        {isDarkMode ? 'Modo oscuro' : 'Modo claro'}
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span>Tamaño de texto</span>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => setFontSize('small')}
+                          className={`px-4 py-2 rounded-lg transition-colors ${fontSize === 'small' ? 'bg-blue-600 text-white' : isDarkMode ? 'bg-[#333] text-gray-400' : 'bg-gray-200 text-gray-700'}`}
+                        >
+                          Pequeño
+                        </button>
+                        <button 
+                          onClick={() => setFontSize('normal')}
+                          className={`px-4 py-2 rounded-lg transition-colors ${fontSize === 'normal' ? 'bg-blue-600 text-white' : isDarkMode ? 'bg-[#333] text-gray-400' : 'bg-gray-200 text-gray-700'}`}
+                        >
+                          Normal
+                        </button>
+                        <button 
+                          onClick={() => setFontSize('large')}
+                          className={`px-4 py-2 rounded-lg transition-colors ${fontSize === 'large' ? 'bg-blue-600 text-white' : isDarkMode ? 'bg-[#333] text-gray-400' : 'bg-gray-200 text-gray-700'}`}
+                        >
+                          Grande
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
           {activeTab === 'history' && <div className="text-center mt-20 text-gray-500">Historial próximamente...</div>}
         </div>

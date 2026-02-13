@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Send, Phone, RefreshCw, Play, Star, Search, Trash2 } from 'lucide-react';
+import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List, ArrowUpDown } from 'lucide-react';
 
 // Helper function to clean channel names
 const cleanChannelName = (name: string): string => {
@@ -43,6 +43,23 @@ const TelegramTab = ({
   const [phoneCodeHash, setPhoneCodeHash] = useState('');
   const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>('event');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Layout and sorting state
+  const [layout, setLayout] = useState<'grid' | 'list'>(() => {
+    return (localStorage.getItem('channelLayout') as 'grid' | 'list') || 'grid';
+  });
+  const [sortBy, setSortBy] = useState<'alphabetical' | 'category'>(() => {
+    return (localStorage.getItem('channelSort') as 'alphabetical' | 'category') || 'alphabetical';
+  });
+  
+  // Persist layout and sorting
+  useEffect(() => {
+    localStorage.setItem('channelLayout', layout);
+  }, [layout]);
+  
+  useEffect(() => {
+    localStorage.setItem('channelSort', sortBy);
+  }, [sortBy]);
 
   const sendCommand = async (cmd: string, extra = {}) => {
     setIsLoading(true);
@@ -112,22 +129,36 @@ const TelegramTab = ({
     }
   }, []);
 
-  // Filter channels based on category and search
-  const filteredChannels = channels.filter(ch => {
-    // Filter by category
-    let matchesCategory = true;
-    if (activeCategory === 'channel') {
-      matchesCategory = ch.type === 'channel' || !ch.type;
-    } else if (activeCategory === 'event') {
-      matchesCategory = ch.type === 'event';
-    }
-    
-    // Filter by search query
-    const matchesSearch = searchQuery === '' || 
-      cleanChannelName(ch.name).toLowerCase().includes(searchQuery.toLowerCase());
-    
-    return matchesCategory && matchesSearch;
-  });
+  // Filter and sort channels
+  const filteredChannels = channels
+    .filter(ch => {
+      // Filter by category
+      let matchesCategory = true;
+      if (activeCategory === 'channel') {
+        matchesCategory = ch.type === 'channel' || !ch.type;
+      } else if (activeCategory === 'event') {
+        matchesCategory = ch.type === 'event';
+      }
+      
+      // Filter by search query
+      const matchesSearch = searchQuery === '' || 
+        cleanChannelName(ch.name).toLowerCase().includes(searchQuery.toLowerCase());
+      
+      return matchesCategory && matchesSearch;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'alphabetical') {
+        return cleanChannelName(a.name).localeCompare(cleanChannelName(b.name), 'es');
+      } else {
+        // Sort by category first, then by name
+        const typeA = a.type || 'channel';
+        const typeB = b.type || 'channel';
+        if (typeA !== typeB) {
+          return typeA.localeCompare(typeB);
+        }
+        return cleanChannelName(a.name).localeCompare(cleanChannelName(b.name), 'es');
+      }
+    });
 
   // Get favorite matches
   const favoriteMatches = getFavoriteMatches();
@@ -237,26 +268,56 @@ const TelegramTab = ({
         </button>
       </div>
 
-      {/* Search bar - only show for channel and event tabs */}
+      {/* Search bar and layout/sort controls - only show for channel and event tabs */}
       {activeCategory !== 'favorites' && (
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar canales..."
-              className="w-full bg-[#242424] border border-[#333] rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
-            />
-            {searchQuery && (
+        <div className="mb-6 space-y-4">
+          <div className="flex gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar canales..."
+                className="w-full bg-[#242424] border border-[#333] rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-white"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            
+            {/* Layout toggle */}
+            <div className="flex bg-[#333] rounded-lg">
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-white"
+                onClick={() => setLayout('grid')}
+                className={`p-3 rounded-lg transition-colors ${layout === 'grid' ? 'bg-[#444] text-white' : 'text-gray-400 hover:text-white'}`}
+                title="Vista de cuadrícula"
               >
-                ×
+                <LayoutGrid size={20} />
               </button>
-            )}
+              <button
+                onClick={() => setLayout('list')}
+                className={`p-3 rounded-lg transition-colors ${layout === 'list' ? 'bg-[#444] text-white' : 'text-gray-400 hover:text-white'}`}
+                title="Vista de lista"
+              >
+                <List size={20} />
+              </button>
+            </div>
+            
+            {/* Sort toggle */}
+            <button
+              onClick={() => setSortBy(sortBy === 'alphabetical' ? 'category' : 'alphabetical')}
+              className="flex items-center gap-2 px-4 py-2 bg-[#333] rounded-lg text-gray-400 hover:text-white transition-colors"
+              title="Ordenar"
+            >
+              <ArrowUpDown size={18} />
+              <span className="text-sm">{sortBy === 'alphabetical' ? 'A-Z' : 'Tipo'}</span>
+            </button>
           </div>
         </div>
       )}
@@ -304,38 +365,68 @@ const TelegramTab = ({
         </div>
       ) : (
         // Regular channels/events view
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className={layout === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-2"}>
           {filteredChannels.length === 0 && (
-             <div className="col-span-full text-center py-10 text-gray-500">
+             <div className={layout === 'grid' ? "col-span-full text-center py-10 text-gray-500" : "text-center py-10 text-gray-500"}>
                {searchQuery ? 'No se encontraron canales que coincidan con la búsqueda.' : 'No se encontró contenido en esta categoría.'}
              </div>
           )}
           {filteredChannels.map((ch, idx) => (
-            <div key={idx} className="bg-[#242424] p-4 rounded-xl border border-[#333] hover:border-blue-500/50 transition-all group">
-              <div className="flex justify-between items-start mb-1">
-                <h3 className="font-bold text-lg truncate flex-1">{cleanChannelName(ch.name)}</h3>
-                <button
-                  onClick={() => {
-                    if (isFavorite(ch.name)) {
-                      removeFromFavorites(ch.name);
-                    } else {
-                      addToFavorites(ch.name);
-                    }
-                  }}
-                  className={`transition-colors ${isFavorite(ch.name) ? 'text-yellow-500' : 'text-gray-600 hover:text-yellow-500'}`}
-                  title={isFavorite(ch.name) ? 'Eliminar de favoritos' : 'Añadir a favoritos'}
-                >
-                  <Star size={18} fill={isFavorite(ch.name) ? 'currentColor' : 'none'} />
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 mb-4 font-mono truncate">{ch.id}</p>
-              
-              <button 
-                onClick={() => playChannel(ch.id)}
-                className="w-full bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
-              >
-                <Play size={16} /> Reproducir Ahora
-              </button>
+            <div key={idx} className={`bg-[#242424] rounded-xl border border-[#333] hover:border-blue-500/50 transition-all group ${layout === 'list' ? 'p-3 flex items-center gap-4' : 'p-4'}`}>
+              {layout === 'grid' ? (
+                <>
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="font-bold text-lg truncate flex-1">{cleanChannelName(ch.name)}</h3>
+                    <button
+                      onClick={() => {
+                        if (isFavorite(ch.name)) {
+                          removeFromFavorites(ch.name);
+                        } else {
+                          addToFavorites(ch.name);
+                        }
+                      }}
+                      className={`transition-colors ${isFavorite(ch.name) ? 'text-yellow-500' : 'text-gray-600 hover:text-yellow-500'}`}
+                      title={isFavorite(ch.name) ? 'Eliminar de favoritos' : 'Añadir a favoritos'}
+                    >
+                      <Star size={18} fill={isFavorite(ch.name) ? 'currentColor' : 'none'} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-4 font-mono truncate">{ch.id}</p>
+                  
+                  <button 
+                    onClick={() => playChannel(ch.id)}
+                    className="w-full bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Play size={16} /> Reproducir Ahora
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold truncate">{cleanChannelName(ch.name)}</h3>
+                    <p className="text-xs text-gray-500 font-mono truncate">{ch.id}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (isFavorite(ch.name)) {
+                        removeFromFavorites(ch.name);
+                      } else {
+                        addToFavorites(ch.name);
+                      }
+                    }}
+                    className={`transition-colors ${isFavorite(ch.name) ? 'text-yellow-500' : 'text-gray-600 hover:text-yellow-500'}`}
+                    title={isFavorite(ch.name) ? 'Eliminar de favoritos' : 'Añadir a favoritos'}
+                  >
+                    <Star size={18} fill={isFavorite(ch.name) ? 'currentColor' : 'none'} />
+                  </button>
+                  <button 
+                    onClick={() => playChannel(ch.id)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors whitespace-nowrap"
+                  >
+                    <Play size={16} /> Reproducir
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>
