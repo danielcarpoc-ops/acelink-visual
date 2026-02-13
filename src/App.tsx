@@ -40,6 +40,65 @@ function App() {
     if (tgPhone) localStorage.setItem('tg_phone', tgPhone);
   }, [tgPhone]);
 
+  // Favorites State - array of cleaned channel names
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    return JSON.parse(localStorage.getItem('ace_favorites') || '[]');
+  });
+
+  // Persist favorites
+  useEffect(() => {
+    localStorage.setItem('ace_favorites', JSON.stringify(favorites));
+  }, [favorites]);
+
+  // Helper functions for favorites
+  const addToFavorites = (channelName: string) => {
+    const cleanedName = channelName
+      .replace(/[^\p{L}\p{N}\s]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    if (!favorites.includes(cleanedName)) {
+      setFavorites([...favorites, cleanedName].sort((a, b) => a.localeCompare(b, 'es')));
+    }
+  };
+
+  const removeFromFavorites = (channelName: string) => {
+    const cleanedName = channelName
+      .replace(/[^\p{L}\p{N}\s]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    setFavorites(favorites.filter(f => f !== cleanedName).sort((a, b) => a.localeCompare(b, 'es')));
+  };
+
+  const isFavorite = (channelName: string) => {
+    const cleanedName = channelName
+      .replace(/[^\p{L}\p{N}\s]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    return favorites.includes(cleanedName);
+  };
+
+  // Find matching channels for favorites
+  const getFavoriteMatches = () => {
+    return favorites
+      .map(favName => {
+        const match = tgChannels.find(ch => {
+          const cleanChName = ch.name
+            .replace(/[^\p{L}\p{N}\s]/gu, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+          const cleanFavName = favName.toLowerCase();
+          return cleanChName.includes(cleanFavName) || cleanFavName.includes(cleanChName);
+        });
+        return match ? { favoriteName: favName, channel: match } : null;
+      })
+      .filter((item): item is { favoriteName: string; channel: any } => item !== null)
+      .sort((a, b) => a.favoriteName.localeCompare(b.favoriteName, 'es'));
+  };
+
   return (
     <div className="flex h-screen bg-[#1a1a1a] text-white">
       {/* Sidebar */}
@@ -92,6 +151,10 @@ function App() {
               setStep={setTgStep}
               channels={tgChannels}
               setChannels={setTgChannels}
+              addToFavorites={addToFavorites}
+              removeFromFavorites={removeFromFavorites}
+              isFavorite={isFavorite}
+              getFavoriteMatches={getFavoriteMatches}
             />
           )}
           {activeTab === 'history' && <div className="text-center mt-20 text-gray-500">Historial próximamente...</div>}
