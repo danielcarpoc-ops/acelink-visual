@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Send, Hash, Key, Phone, RefreshCw, Play } from 'lucide-react';
+import { Send, Phone, RefreshCw, Play } from 'lucide-react';
 
 const TelegramTab = () => {
-  // Config State
-  const [apiId, setApiId] = useState(localStorage.getItem('tg_api_id') || '');
-  const [apiHash, setApiHash] = useState(localStorage.getItem('tg_api_hash') || '');
+  // Config State - Only phone is needed, API ID/Hash come from config.json
   const [phone, setPhone] = useState(localStorage.getItem('tg_phone') || '');
   
   // Auth State
@@ -17,11 +15,9 @@ const TelegramTab = () => {
   const [channels, setChannels] = useState<any[]>([]);
 
   useEffect(() => {
-    // Save credentials when changed
-    localStorage.setItem('tg_api_id', apiId);
-    localStorage.setItem('tg_api_hash', apiHash);
+    // Save phone when changed
     localStorage.setItem('tg_phone', phone);
-  }, [apiId, apiHash, phone]);
+  }, [phone]);
 
   const sendCommand = async (cmd: string, extra = {}) => {
     setIsLoading(true);
@@ -29,8 +25,6 @@ const TelegramTab = () => {
     try {
       const payload = {
         command: cmd,
-        apiId: parseInt(apiId),
-        apiHash,
         phone,
         ...extra
       };
@@ -46,11 +40,9 @@ const TelegramTab = () => {
 
   const [phoneCodeHash, setPhoneCodeHash] = useState('');
 
-  // ...
-
   const handleLogin = async () => {
-    if (!apiId || !apiHash || !phone) {
-      setStatusMsg('Please fill all fields');
+    if (!phone) {
+      setStatusMsg('Please enter your phone number');
       return;
     }
     const res = await sendCommand('login');
@@ -90,7 +82,7 @@ const TelegramTab = () => {
     window.dispatchEvent(event);
   };
 
-  const [activeCategory, setActiveCategory] = useState<'channel' | 'event'>('channel');
+  const [activeCategory, setActiveCategory] = useState<'channel' | 'event'>('event');
 
   const filteredChannels = channels.filter(ch => {
       if (activeCategory === 'channel') return ch.type === 'channel' || !ch.type;
@@ -107,26 +99,6 @@ const TelegramTab = () => {
         
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2"><Hash size={14}/> API ID</label>
-            <input 
-              type="text" 
-              value={apiId}
-              onChange={e => setApiId(e.target.value)}
-              className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-4 py-2 text-white"
-              placeholder="123456"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2"><Key size={14}/> API Hash</label>
-            <input 
-              type="text" 
-              value={apiHash}
-              onChange={e => setApiHash(e.target.value)}
-              className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-4 py-2 text-white"
-              placeholder="abcdef123456..."
-            />
-          </div>
-          <div>
             <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2"><Phone size={14}/> Phone Number</label>
             <input 
               type="text" 
@@ -135,7 +107,7 @@ const TelegramTab = () => {
               className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-4 py-2 text-white"
               placeholder="+34600000000"
             />
-            <p className="text-xs text-gray-500 mt-1">Get these from <a href="https://my.telegram.org" target="_blank" className="text-blue-400 underline">my.telegram.org</a></p>
+            <p className="text-xs text-gray-500 mt-1">API credentials are loaded from config.json</p>
           </div>
 
           <button 

@@ -5,7 +5,7 @@ import TelegramTab from './components/TelegramTab';
 
 function App() {
   const [engineStatus, setEngineStatus] = useState<string>('checking');
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('telegram');
   const [pendingStream, setPendingStream] = useState<string | null>(null);
 
   useEffect(() => {

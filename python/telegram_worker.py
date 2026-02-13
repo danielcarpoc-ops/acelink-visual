@@ -32,12 +32,29 @@ async def main():
         command_obj = json.loads(input_data)
         command = command_obj.get("command")
 
-        api_id = command_obj.get("apiId")
-        api_hash = command_obj.get("apiHash")
+        # Try to load config from file
+        config = {}
+        if os.path.exists("config.json"):
+            try:
+                with open("config.json", "r") as f:
+                    config = json.load(f)
+            except:
+                pass
+
+        # Use config file or command line arguments
+        api_id = command_obj.get("apiId") or config.get("api_id")
+        api_hash = command_obj.get("apiHash") or config.get("api_hash")
         phone = command_obj.get("phone")
 
         if not api_id or not api_hash:
-            print(json.dumps({"status": "error", "message": "Missing Credentials"}))
+            print(
+                json.dumps(
+                    {
+                        "status": "error",
+                        "message": "Missing API Credentials. Create config.json with api_id and api_hash",
+                    }
+                )
+            )
             return
 
         client = TelegramClient(SESSION_FILE, api_id, api_hash)
