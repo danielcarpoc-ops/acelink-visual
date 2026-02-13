@@ -5,5 +5,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getStreamUrl: (id: string) => ipcRenderer.invoke('get-stream-url', id),
   getProxyUrl: (id: string) => ipcRenderer.invoke('get-proxy-url', id),
   openVlc: (url: string) => ipcRenderer.invoke('open-vlc', url),
-  telegramAction: (command: any) => ipcRenderer.invoke('telegram-action', command)
+  telegramAction: (command: any) => ipcRenderer.invoke('telegram-action', command),
+  setAlwaysOnTop: (value: boolean) => ipcRenderer.invoke('set-always-on-top', value)
 });

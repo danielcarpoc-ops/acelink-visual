@@ -7,5 +7,6 @@ interface Window {
     getProxyUrl: (id: string) => Promise<string>;
     openVlc: (url: string) => Promise<void>;
     telegramAction: (command: any) => Promise<any>;
+    setAlwaysOnTop?: (value: boolean) => Promise<boolean>;
   }
 }

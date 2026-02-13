@@ -288,3 +288,11 @@ ipcMain.handle('open-vlc', async (event, url) => {
 ipcMain.handle('telegram-action', async (event, command) => {
   return await runPythonScript(command);
 });
+
+ipcMain.handle('set-always-on-top', async (event, value: boolean) => {
+  if (mainWindow) {
+    mainWindow.setAlwaysOnTop(value);
+    return value;
+  }
+  return false;
+});

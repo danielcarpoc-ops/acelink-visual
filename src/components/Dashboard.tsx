@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Play, ExternalLink, Tv } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Play, ExternalLink, Tv, RefreshCw, PictureInPicture, Monitor, Settings } from 'lucide-react';
 import Hls from 'hls.js';
 
 interface DashboardProps {
@@ -9,12 +9,26 @@ interface DashboardProps {
 const Dashboard = ({ initialStreamId }: DashboardProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
+  
   const [streamId, setStreamId] = useState(initialStreamId || '');
   const [isPlaying, setIsPlaying] = useState(false);
   const [streamUrl, setStreamUrl] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>('');
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+  
+  // Quality selector state
+  const [qualityLevels, setQualityLevels] = useState<{level: number; height: number; width: number}[]>([]);
+  const [currentQuality, setCurrentQuality] = useState<number>(-1); // -1 = Auto
+  const [showQualityMenu, setShowQualityMenu] = useState(false);
+  
+  // PiP and Always on Top state
+  const [isPiPActive, setIsPiPActive] = useState(false);
+  const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false);
 
   useEffect(() => {
     if (initialStreamId) {
@@ -23,6 +37,32 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
         setTimeout(() => handlePlay(cleanId), 100);
     }
   }, [initialStreamId]);
+
+  // Retry function
+  const handleRetry = useCallback(() => {
+    if (retryCountRef.current < maxRetries) {
+      retryCountRef.current += 1;
+      setRetryCount(retryCountRef.current);
+      setIsRetrying(true);
+      setStatus(`Reconectando ${retryCountRef.current}/${maxRetries}...`);
+      
+      // Destroy current HLS instance
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      
+      // Wait 2 seconds before retrying
+      setTimeout(() => {
+        setIsRetrying(false);
+        // Trigger useEffect by updating streamUrl
+        setStreamUrl(prev => prev + '?retry=' + Date.now());
+      }, 2000);
+    } else {
+      setStatus('Error fatal - usa VLC');
+      setError('No se pudo conectar después de varios intentos. Intenta abrirlo en VLC.');
+    }
+  }, []);
 
   // Initialize HLS player when stream URL changes
   useEffect(() => {
@@ -34,6 +74,8 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
       }
 
       const video = videoRef.current;
+      retryCountRef.current = 0;
+      setRetryCount(0);
 
       if (Hls.isSupported()) {
         console.log('HLS.js is supported, creating player...');
@@ -44,13 +86,22 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
           lowLatencyMode: true,
           maxBufferLength: 30,
           maxMaxBufferLength: 60,
+          startLevel: -1, // Auto quality selection
         });
 
         hlsRef.current.loadSource(streamUrl);
         hlsRef.current.attachMedia(video);
 
-        hlsRef.current.on(Hls.Events.MANIFEST_PARSED, () => {
-          console.log('HLS manifest parsed, starting playback...');
+        // Track quality levels
+        hlsRef.current.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+          console.log('HLS manifest parsed, levels:', data.levels);
+          setQualityLevels(data.levels.map((level, idx) => ({
+            level: idx,
+            height: level.height,
+            width: level.width
+          })));
+          setCurrentQuality(hlsRef.current?.currentLevel ?? -1);
+          
           setStatus('Cargando...');
           video.play().catch(err => {
             console.log('Auto-play prevented:', err);
@@ -64,8 +115,11 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
-                setStatus('Error de red - reintentando...');
-                hlsRef.current?.startLoad();
+                if (retryCountRef.current < maxRetries && !isRetrying) {
+                  handleRetry();
+                } else {
+                  setStatus('Error de red - usa VLC');
+                }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
                 setStatus('Error de medios - recuperando...');
@@ -81,10 +135,15 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
 
         hlsRef.current.on(Hls.Events.FRAG_LOADED, () => {
           setStatus('Reproduciendo');
+          setRetryCount(0);
+          retryCountRef.current = 0;
+        });
+
+        hlsRef.current.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+          setCurrentQuality(data.level);
         });
 
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native HLS support (Safari)
         console.log('Using native HLS support');
         video.src = streamUrl;
         setStatus('Reproducción nativa');
@@ -100,7 +159,7 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
         hlsRef.current = null;
       }
     };
-  }, [isPlaying, streamUrl]);
+  }, [isPlaying, streamUrl, isRetrying, handleRetry]);
 
   const handlePlay = async (overrideId?: string) => {
     const targetId = (typeof overrideId === 'string' ? overrideId : streamId);
@@ -110,6 +169,8 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
     setError('');
     setStatus('Inicializando...');
     setIsPlaying(false);
+    setRetryCount(0);
+    retryCountRef.current = 0;
 
     const cleanId = targetId.replace('acestream://', '').trim();
 
@@ -118,14 +179,11 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
         throw new Error('API de Electron no disponible');
       }
       
-      // Get proxy URL - we'll use the manifest endpoint for HLS
       const proxyUrl = await window.electronAPI.getProxyUrl(cleanId);
-      // Replace the URL to use manifest.m3u8 instead of getstream
       const hlsUrl = proxyUrl.replace('/stream?', '/manifest.m3u8?');
       console.log('HLS Stream URL:', hlsUrl);
       setStreamUrl(hlsUrl);
       
-      // Wait for engine to buffer
       setStatus('Esperando al motor de Ace Stream...');
       await new Promise(resolve => setTimeout(resolve, 5000));
       
@@ -144,6 +202,57 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
     if (!streamId) return;
     const url = await window.electronAPI.getStreamUrl(streamId);
     await window.electronAPI.openVlc(url);
+  };
+
+  // Quality selection handler
+  const handleQualityChange = (level: number) => {
+    if (hlsRef.current) {
+      hlsRef.current.currentLevel = level;
+      setCurrentQuality(level);
+      setShowQualityMenu(false);
+    }
+  };
+
+  // Picture-in-Picture toggle
+  const togglePiP = async () => {
+    if (!videoRef.current) return;
+    
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setIsPiPActive(false);
+      } else {
+        await videoRef.current.requestPictureInPicture();
+        setIsPiPActive(true);
+      }
+    } catch (err) {
+      console.error('PiP error:', err);
+    }
+  };
+
+  // Listen for PiP changes
+  useEffect(() => {
+    const handleEnterPiP = () => setIsPiPActive(true);
+    const handleLeavePiP = () => setIsPiPActive(false);
+    
+    videoRef.current?.addEventListener('enterpictureinpicture', handleEnterPiP);
+    videoRef.current?.addEventListener('leavepictureinpicture', handleLeavePiP);
+    
+    return () => {
+      videoRef.current?.removeEventListener('enterpictureinpicture', handleEnterPiP);
+      videoRef.current?.removeEventListener('leavepictureinpicture', handleLeavePiP);
+    };
+  }, []);
+
+  // Always on Top toggle
+  const toggleAlwaysOnTop = async () => {
+    try {
+      const newState = !isAlwaysOnTop;
+      setIsAlwaysOnTop(newState);
+      await window.electronAPI.setAlwaysOnTop?.(newState);
+    } catch (err) {
+      console.error('Always on Top error:', err);
+    }
   };
 
   return (
@@ -203,11 +312,90 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
           {status && status !== 'Reproduciendo' && (
             <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-sm text-gray-300">
               {status}
+              {retryCount > 0 && retryCount < maxRetries && (
+                <span className="ml-2 text-yellow-400">({retryCount}/{maxRetries})</span>
+              )}
+            </div>
+          )}
+
+          {/* Retry button when error */}
+          {retryCount >= maxRetries && !isRetrying && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-20">
+              <div className="text-center">
+                <p className="text-red-400 mb-4">No se pudo conectar al stream</p>
+                <button 
+                  onClick={handleRetry}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-colors flex items-center gap-2"
+                >
+                  <RefreshCw size={18} />
+                  Reintentar
+                </button>
+                <button 
+                  onClick={openVLC}
+                  className="ml-2 bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-xl font-medium transition-colors flex items-center gap-2"
+                >
+                  <ExternalLink size={16} />
+                  Abrir en VLC
+                </button>
+              </div>
             </div>
           )}
            
            {/* Overlay Controls */}
            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+              {/* Quality Selector */}
+              {qualityLevels.length > 0 && (
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowQualityMenu(!showQualityMenu)}
+                    className="bg-black/50 backdrop-blur-md p-2 rounded-lg text-white hover:bg-white/20 transition-colors"
+                    title="Calidad del video"
+                  >
+                    <Settings size={18} />
+                    <span className="ml-1 text-xs">{currentQuality === -1 ? 'Auto' : `${qualityLevels[currentQuality]?.height}p`}</span>
+                  </button>
+                  
+                  {showQualityMenu && (
+                    <div className="absolute top-full right-0 mt-2 bg-[#333] rounded-lg shadow-xl py-2 min-w-[120px] z-50">
+                      <button
+                        onClick={() => handleQualityChange(-1)}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-[#444] transition-colors ${currentQuality === -1 ? 'text-blue-400' : 'text-white'}`}
+                      >
+                        Auto
+                      </button>
+                      {qualityLevels.map((q) => (
+                        <button
+                          key={q.level}
+                          onClick={() => handleQualityChange(q.level)}
+                          className={`w-full px-4 py-2 text-left text-sm hover:bg-[#444] transition-colors ${currentQuality === q.level ? 'text-blue-400' : 'text-white'}`}
+                        >
+                          {q.height}p
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Picture-in-Picture */}
+              <button 
+                onClick={togglePiP}
+                className={`p-2 rounded-lg transition-colors ${isPiPActive ? 'bg-blue-600 text-white' : 'bg-black/50 backdrop-blur-md text-white hover:bg-white/20'}`}
+                title={isPiPActive ? 'Salir de PiP' : 'Picture-in-Picture'}
+              >
+                <PictureInPicture size={18} />
+              </button>
+
+              {/* Always on Top */}
+              <button 
+                onClick={toggleAlwaysOnTop}
+                className={`p-2 rounded-lg transition-colors ${isAlwaysOnTop ? 'bg-green-600 text-white' : 'bg-black/50 backdrop-blur-md text-white hover:bg-white/20'}`}
+                title={isAlwaysOnTop ? 'Desactivar Siempre Visible' : 'Siempre Visible'}
+              >
+                <Monitor size={18} />
+              </button>
+              
+              {/* Mute */}
               <button 
                 onClick={() => {
                   if (videoRef.current) {
@@ -219,6 +407,8 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
               >
                 {videoRef.current?.muted ? '🔇' : '🔊'}
               </button>
+
+              {/* VLC */}
               <button 
                 onClick={openVLC}
                 className="bg-orange-600 hover:bg-orange-700 text-white p-2 rounded-lg transition-colors flex items-center gap-2 shadow-lg"
