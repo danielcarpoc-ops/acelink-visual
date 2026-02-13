@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, Play, Settings, Send } from 'lucide-react';
+import { Activity, Play, Send } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import TelegramTab from './components/TelegramTab';
 
@@ -63,11 +63,7 @@ function App() {
           </button>
         </nav>
 
-        <div className="mt-auto no-drag">
-          <button className="p-3 text-gray-500 hover:text-white">
-            <Settings size={24} />
-          </button>
-        </div>
+
       </div>
 
       {/* Main Content */}
