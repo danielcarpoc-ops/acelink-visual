@@ -15,6 +15,7 @@ import Hls from 'hls.js';
 
 interface DashboardProps {
   initialStreamId?: string;
+  isDarkMode: boolean;
 }
 
 // Cast SDK types
@@ -25,7 +26,7 @@ declare global {
   }
 }
 
-const Dashboard = ({ initialStreamId }: DashboardProps) => {
+const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -391,21 +392,21 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
+      <h2 className={`text-3xl font-bold mb-6 flex items-center gap-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
         <Tv className="text-blue-500" />
         Reproductor de Streams
       </h2>
 
       {/* Input Section */}
-      <div className="bg-[#242424] p-6 rounded-2xl mb-8 shadow-lg">
-        <label className="block text-sm text-gray-400 mb-2">ID de Ace Stream o Enlace Magnet</label>
+      <div className={`p-6 rounded-2xl mb-8 shadow-lg ${isDarkMode ? 'bg-[#242424]' : 'bg-white'}`}>
+        <label className={`block text-sm mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>ID de Ace Stream o Enlace Magnet</label>
         <div className="flex gap-3">
           <input 
             type="text" 
             value={streamId}
             onChange={(e) => setStreamId(e.target.value)}
             placeholder="ej. 23894723847238947..."
-            className="flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 text-white transition-colors"
+            className={`flex-1 border rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] border-[#333] text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
           />
           <button 
             onClick={() => handlePlay()}
@@ -417,7 +418,7 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
         </div>
         
         {error && (
-          <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+          <div className={`mt-3 p-3 rounded-lg ${isDarkMode ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
             <p className="text-red-400 text-sm mb-2">{error}</p>
             <button 
               onClick={openVLC}
@@ -587,22 +588,22 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
       {!isPlaying && !loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div 
-            className="bg-[#242424] p-6 rounded-2xl border border-[#333] hover:border-orange-500/50 transition-colors cursor-pointer group"
+            className={`p-6 rounded-2xl border transition-colors cursor-pointer group ${isDarkMode ? 'bg-[#242424] border-[#333] hover:border-orange-500/50' : 'bg-white border-gray-200 hover:border-orange-400'}`}
             onClick={openVLC}
           >
-            <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center mb-4 group-hover:bg-orange-500/20 transition-colors">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 transition-colors ${isDarkMode ? 'bg-orange-500/10 group-hover:bg-orange-500/20' : 'bg-orange-100 group-hover:bg-orange-200'}`}>
               <ExternalLink className="text-orange-500" size={24} />
             </div>
-            <h3 className="text-xl font-semibold mb-2 text-orange-400">Abrir en VLC</h3>
-            <p className="text-gray-400 text-sm">Mejor compatibilidad con todos los canales y códecs de Ace Stream.</p>
+            <h3 className={`text-xl font-semibold mb-2 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>Abrir en VLC</h3>
+            <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Mejor compatibilidad con todos los canales y códecs de Ace Stream.</p>
           </div>
 
-          <div className="bg-[#242424] p-6 rounded-2xl border border-[#333]">
-            <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center mb-4">
+          <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-[#242424] border-[#333]' : 'bg-white border-gray-200'}`}>
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${isDarkMode ? 'bg-blue-500/10' : 'bg-blue-100'}`}>
               <Play className="text-blue-500" size={24} />
             </div>
-            <h3 className="text-xl font-semibold mb-2">Reproductor Integrado</h3>
-            <p className="text-gray-400 text-sm">Usa streaming HLS para mejor compatibilidad con el navegador.</p>
+            <h3 className={`text-xl font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Reproductor Integrado</h3>
+            <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Usa streaming HLS para mejor compatibilidad con el navegador.</p>
           </div>
         </div>
       )}

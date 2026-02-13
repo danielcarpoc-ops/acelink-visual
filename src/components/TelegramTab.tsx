@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List, ArrowUpDown } from 'lucide-react';
+import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List, ArrowUpDown, Tv } from 'lucide-react';
 
 // Helper function to clean channel names
 const cleanChannelName = (name: string): string => {
@@ -23,6 +23,7 @@ interface TelegramTabProps {
   removeFromFavorites: (name: string) => void;
   isFavorite: (name: string) => boolean;
   getFavoriteMatches: () => { favoriteName: string; channel: any }[];
+  isDarkMode: boolean;
 }
 
 const TelegramTab = ({ 
@@ -35,7 +36,8 @@ const TelegramTab = ({
   addToFavorites,
   removeFromFavorites,
   isFavorite,
-  getFavoriteMatches
+  getFavoriteMatches,
+  isDarkMode
 }: TelegramTabProps) => {
   const [code, setCode] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
@@ -165,22 +167,22 @@ const TelegramTab = ({
 
   if (step === 'config') {
     return (
-      <div className="max-w-2xl mx-auto p-6 bg-[#242424] rounded-2xl shadow-xl">
-        <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+      <div className={`max-w-2xl mx-auto p-6 ${isDarkMode ? 'bg-[#242424]' : 'bg-white'} rounded-2xl shadow-xl`}>
+        <h2 className={`text-2xl font-bold mb-6 flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
           <Send size={24} className="text-blue-400" /> Configuración de Telegram
         </h2>
         
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2"><Phone size={14}/> Número de Teléfono</label>
+            <label className={`block text-sm mb-1 flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}><Phone size={14}/> Número de Teléfono</label>
             <input 
               type="text" 
               value={phone}
               onChange={e => setPhone(e.target.value)}
-              className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-4 py-2 text-white"
+              className={`w-full border rounded-lg px-4 py-2 ${isDarkMode ? 'bg-[#1a1a1a] border-[#333] text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
               placeholder="+34600000000"
             />
-            <p className="text-xs text-gray-500 mt-1">Las credenciales API se cargan desde config.json</p>
+            <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Las credenciales API se cargan desde config.json</p>
           </div>
 
           <button 
@@ -199,15 +201,15 @@ const TelegramTab = ({
 
   if (step === 'code') {
     return (
-      <div className="max-w-md mx-auto p-6 bg-[#242424] rounded-2xl shadow-xl text-center">
-        <h2 className="text-xl font-bold mb-4">Introduce el Código</h2>
-        <p className="text-gray-400 mb-6 text-sm">Hemos enviado un código a tu app de Telegram.</p>
+      <div className={`max-w-md mx-auto p-6 ${isDarkMode ? 'bg-[#242424]' : 'bg-white'} rounded-2xl shadow-xl text-center`}>
+        <h2 className={`text-xl font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Introduce el Código</h2>
+        <p className={`mb-6 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Hemos enviado un código a tu app de Telegram.</p>
         
         <input 
           type="text" 
           value={code}
           onChange={e => setCode(e.target.value)}
-          className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-4 py-3 text-white text-center text-2xl tracking-widest mb-6"
+          className={`w-full border rounded-lg px-4 py-3 text-center text-2xl tracking-widest mb-6 ${isDarkMode ? 'bg-[#1a1a1a] border-[#333] text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
           placeholder="12345"
         />
 
@@ -225,16 +227,21 @@ const TelegramTab = ({
 
   return (
     <div className="max-w-4xl mx-auto">
+      <h2 className={`text-3xl font-bold mb-6 flex items-center gap-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+        <Tv className="text-blue-500" />
+        Canales de Telegram
+      </h2>
+      
       <div className="flex justify-between items-center mb-6">
         <div></div>
         
-        <div className="flex bg-[#333] rounded-lg p-1">
+        <div className={`flex rounded-lg p-1 ${isDarkMode ? 'bg-[#333]' : 'bg-gray-200'}`}>
              <button 
                onClick={() => {
                  setActiveCategory('channel');
                  setSearchQuery('');
                }}
-               className={`px-4 py-1 rounded-md text-sm font-medium transition-colors ${activeCategory === 'channel' ? 'bg-[#444] text-white shadow' : 'text-gray-400 hover:text-white'}`}
+               className={`px-4 py-1 rounded-md text-sm font-medium transition-colors ${activeCategory === 'channel' ? (isDarkMode ? 'bg-[#444] text-white shadow' : 'bg-white text-gray-900 shadow') : (isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900')}`}
              >
                Canales
              </button>
@@ -243,7 +250,7 @@ const TelegramTab = ({
                  setActiveCategory('event');
                  setSearchQuery('');
                }}
-               className={`px-4 py-1 rounded-md text-sm font-medium transition-colors ${activeCategory === 'event' ? 'bg-[#444] text-white shadow' : 'text-gray-400 hover:text-white'}`}
+               className={`px-4 py-1 rounded-md text-sm font-medium transition-colors ${activeCategory === 'event' ? (isDarkMode ? 'bg-[#444] text-white shadow' : 'bg-white text-gray-900 shadow') : (isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900')}`}
              >
                Eventos
              </button>
@@ -252,7 +259,7 @@ const TelegramTab = ({
                  setActiveCategory('favorites');
                  setSearchQuery('');
                }}
-               className={`px-4 py-1 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${activeCategory === 'favorites' ? 'bg-[#444] text-white shadow' : 'text-gray-400 hover:text-white'}`}
+               className={`px-4 py-1 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${activeCategory === 'favorites' ? (isDarkMode ? 'bg-[#444] text-white shadow' : 'bg-white text-gray-900 shadow') : (isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900')}`}
              >
                <Star size={14} /> Favoritos {favoriteMatches.length > 0 && `(${favoriteMatches.length})`}
              </button>
@@ -261,7 +268,7 @@ const TelegramTab = ({
         <button 
           onClick={fetchChannels}
           disabled={isLoading}
-          className="p-2 bg-[#333] hover:bg-[#444] rounded-lg transition-colors"
+          className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'bg-[#333] hover:bg-[#444]' : 'bg-gray-200 hover:bg-gray-300'} ${isDarkMode ? 'text-white' : 'text-gray-700'}`}
           title="Actualizar"
         >
           <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
@@ -273,18 +280,18 @@ const TelegramTab = ({
         <div className="mb-6 space-y-4">
           <div className="flex gap-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} />
+              <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} size={18} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar canales..."
-                className="w-full bg-[#242424] border border-[#333] rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                className={`w-full border rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-blue-500 transition-colors ${isDarkMode ? 'bg-[#242424] border-[#333] text-white' : 'bg-white border-gray-300 text-gray-900'}`}
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-white"
+                  className={`absolute right-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-gray-500 hover:text-white' : 'text-gray-400 hover:text-gray-900'}`}
                 >
                   ×
                 </button>
@@ -292,17 +299,17 @@ const TelegramTab = ({
             </div>
             
             {/* Layout toggle */}
-            <div className="flex bg-[#333] rounded-lg">
+            <div className={`flex rounded-lg ${isDarkMode ? 'bg-[#333]' : 'bg-gray-200'}`}>
               <button
                 onClick={() => setLayout('grid')}
-                className={`p-3 rounded-lg transition-colors ${layout === 'grid' ? 'bg-[#444] text-white' : 'text-gray-400 hover:text-white'}`}
+                className={`p-3 rounded-lg transition-colors ${layout === 'grid' ? (isDarkMode ? 'bg-[#444] text-white' : 'bg-white text-gray-900 shadow') : (isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900')}`}
                 title="Vista de cuadrícula"
               >
                 <LayoutGrid size={20} />
               </button>
               <button
                 onClick={() => setLayout('list')}
-                className={`p-3 rounded-lg transition-colors ${layout === 'list' ? 'bg-[#444] text-white' : 'text-gray-400 hover:text-white'}`}
+                className={`p-3 rounded-lg transition-colors ${layout === 'list' ? (isDarkMode ? 'bg-[#444] text-white' : 'bg-white text-gray-900 shadow') : (isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900')}`}
                 title="Vista de lista"
               >
                 <List size={20} />
@@ -312,7 +319,7 @@ const TelegramTab = ({
             {/* Sort toggle */}
             <button
               onClick={() => setSortBy(sortBy === 'alphabetical' ? 'category' : 'alphabetical')}
-              className="flex items-center gap-2 px-4 py-2 bg-[#333] rounded-lg text-gray-400 hover:text-white transition-colors"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${isDarkMode ? 'bg-[#333] text-gray-400 hover:text-white' : 'bg-gray-200 text-gray-600 hover:text-gray-900'}`}
               title="Ordenar"
             >
               <ArrowUpDown size={18} />
@@ -323,7 +330,7 @@ const TelegramTab = ({
       )}
 
       {channels.length === 0 ? (
-        <div className="text-center py-20 text-gray-500">
+        <div className={`text-center py-20 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
           <p>Aún no se han encontrado streams.</p>
           <button onClick={fetchChannels} className="text-blue-400 mt-2 underline">Intentar escanear ahora</button>
         </div>
@@ -331,29 +338,29 @@ const TelegramTab = ({
         // Favorites view
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {favoriteMatches.length === 0 ? (
-            <div className="col-span-full text-center py-10 text-gray-500">
+            <div className={`col-span-full text-center py-10 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
               <p>No hay favoritos que coincidan con los canales actuales.</p>
-              <p className="text-sm mt-2">Añade canales a favoritos desde las pestañas Canales o Eventos.</p>
+              <p className={`text-sm mt-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Añade canales a favoritos desde las pestañas Canales o Eventos.</p>
             </div>
           ) : (
             favoriteMatches.map((item, idx) => (
-              <div key={idx} className="bg-[#242424] p-4 rounded-xl border border-[#333] hover:border-yellow-500/50 transition-all group">
+              <div key={idx} className={`p-4 rounded-xl border transition-all group ${isDarkMode ? 'bg-[#242424] border-[#333] hover:border-yellow-500/50' : 'bg-white border-gray-200 hover:border-yellow-400'}`}>
                 <div className="flex justify-between items-start mb-1">
-                  <h3 className="font-bold text-lg truncate flex-1">{cleanChannelName(item.channel.name)}</h3>
+                  <h3 className={`font-bold text-lg truncate flex-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(item.channel.name)}</h3>
                   <Star className="text-yellow-500 shrink-0" size={18} fill="currentColor" />
                 </div>
-                <p className="text-xs text-gray-500 mb-4 font-mono truncate">{item.channel.id}</p>
+                <p className={`text-xs mb-4 font-mono truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{item.channel.id}</p>
                 
                 <div className="flex gap-2">
                   <button 
                     onClick={() => playChannel(item.channel.id)}
-                    className="flex-1 bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                    className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                   >
                     <Play size={16} /> Reproducir
                   </button>
                   <button
                     onClick={() => removeFromFavorites(item.channel.name)}
-                    className="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white py-2 px-3 rounded-lg transition-colors"
+                    className={`py-2 px-3 rounded-lg transition-colors ${isDarkMode ? 'bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white' : 'bg-red-100 hover:bg-red-600 text-red-600 hover:text-white'}`}
                     title="Eliminar de favoritos"
                   >
                     <Trash2 size={16} />
@@ -367,16 +374,16 @@ const TelegramTab = ({
         // Regular channels/events view
         <div className={layout === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-2"}>
           {filteredChannels.length === 0 && (
-             <div className={layout === 'grid' ? "col-span-full text-center py-10 text-gray-500" : "text-center py-10 text-gray-500"}>
+             <div className={layout === 'grid' ? `col-span-full text-center py-10 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}` : `text-center py-10 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                {searchQuery ? 'No se encontraron canales que coincidan con la búsqueda.' : 'No se encontró contenido en esta categoría.'}
              </div>
           )}
           {filteredChannels.map((ch, idx) => (
-            <div key={idx} className={`bg-[#242424] rounded-xl border border-[#333] hover:border-blue-500/50 transition-all group ${layout === 'list' ? 'p-3 flex items-center gap-4' : 'p-4'}`}>
+            <div key={idx} className={`rounded-xl border transition-all group ${layout === 'list' ? 'p-3 flex items-center gap-4' : 'p-4'} ${isDarkMode ? 'bg-[#242424] border-[#333] hover:border-blue-500/50' : 'bg-white border-gray-200 hover:border-blue-400'}`}>
               {layout === 'grid' ? (
                 <>
                   <div className="flex justify-between items-start mb-1">
-                    <h3 className="font-bold text-lg truncate flex-1">{cleanChannelName(ch.name)}</h3>
+                    <h3 className={`font-bold text-lg truncate flex-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(ch.name)}</h3>
                     <button
                       onClick={() => {
                         if (isFavorite(ch.name)) {
@@ -385,17 +392,17 @@ const TelegramTab = ({
                           addToFavorites(ch.name);
                         }
                       }}
-                      className={`transition-colors ${isFavorite(ch.name) ? 'text-yellow-500' : 'text-gray-600 hover:text-yellow-500'}`}
+                      className={`transition-colors ${isFavorite(ch.name) ? 'text-yellow-500' : (isDarkMode ? 'text-gray-600 hover:text-yellow-500' : 'text-gray-400 hover:text-yellow-500')}`}
                       title={isFavorite(ch.name) ? 'Eliminar de favoritos' : 'Añadir a favoritos'}
                     >
                       <Star size={18} fill={isFavorite(ch.name) ? 'currentColor' : 'none'} />
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mb-4 font-mono truncate">{ch.id}</p>
+                  <p className={`text-xs mb-4 font-mono truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{ch.id}</p>
                   
                   <button 
                     onClick={() => playChannel(ch.id)}
-                    className="w-full bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                    className={`w-full py-2 rounded-lg flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                   >
                     <Play size={16} /> Reproducir Ahora
                   </button>
@@ -403,8 +410,8 @@ const TelegramTab = ({
               ) : (
                 <>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold truncate">{cleanChannelName(ch.name)}</h3>
-                    <p className="text-xs text-gray-500 font-mono truncate">{ch.id}</p>
+                    <h3 className={`font-bold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(ch.name)}</h3>
+                    <p className={`text-xs font-mono truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{ch.id}</p>
                   </div>
                   <button
                     onClick={() => {
@@ -414,7 +421,7 @@ const TelegramTab = ({
                         addToFavorites(ch.name);
                       }
                     }}
-                    className={`transition-colors ${isFavorite(ch.name) ? 'text-yellow-500' : 'text-gray-600 hover:text-yellow-500'}`}
+                    className={`transition-colors ${isFavorite(ch.name) ? 'text-yellow-500' : (isDarkMode ? 'text-gray-600 hover:text-yellow-500' : 'text-gray-400 hover:text-yellow-500')}`}
                     title={isFavorite(ch.name) ? 'Eliminar de favoritos' : 'Añadir a favoritos'}
                   >
                     <Star size={18} fill={isFavorite(ch.name) ? 'currentColor' : 'none'} />

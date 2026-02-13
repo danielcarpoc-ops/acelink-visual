@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, Play, Tv, Sun, Moon, Type } from 'lucide-react';
+import { Activity, Play, Tv, Sun, Moon, Settings } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import TelegramTab from './components/TelegramTab';
 
@@ -129,9 +129,9 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen bg-[#1a1a1a] text-white">
+    <div className={`flex h-screen ${isDarkMode ? 'bg-[#1a1a1a] text-white' : 'bg-gray-50 text-gray-900'}`}>
       {/* Sidebar */}
-      <div className="w-20 bg-[#242424] flex flex-col items-center py-6 border-r border-[#333] pt-12 drag">
+      <div className={`w-20 flex flex-col items-center py-6 border-r pt-12 drag ${isDarkMode ? 'bg-[#242424] border-[#333]' : 'bg-white border-gray-200'}`}>
         <div className="mb-8 p-2 bg-blue-600 rounded-lg no-drag">
           <Activity size={24} color="white" />
         </div>
@@ -139,79 +139,45 @@ function App() {
         <nav className="flex flex-col gap-4 w-full items-center no-drag">
           <button 
             onClick={() => setActiveTab('telegram')}
-            className={`p-3 rounded-xl transition-all ${activeTab === 'telegram' ? 'bg-[#333] text-blue-400' : 'text-gray-400 hover:text-white'}`}
+            className={`p-3 rounded-xl transition-all ${activeTab === 'telegram' ? (isDarkMode ? 'bg-[#333] text-blue-400' : 'bg-blue-100 text-blue-600') : (isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900')}`}
             title="Canales"
           >
             <Tv size={24} />
           </button>
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`p-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-[#333] text-blue-400' : 'text-gray-400 hover:text-white'}`}
+            className={`p-3 rounded-xl transition-all ${activeTab === 'dashboard' ? (isDarkMode ? 'bg-[#333] text-blue-400' : 'bg-blue-100 text-blue-600') : (isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900')}`}
             title="Reproductor"
           >
             <Play size={24} />
           </button>
           <button 
             onClick={() => setActiveTab('settings')}
-            className={`p-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-[#333] text-blue-400' : 'text-gray-400 hover:text-white'}`}
+            className={`p-3 rounded-xl transition-all ${activeTab === 'settings' ? (isDarkMode ? 'bg-[#333] text-blue-400' : 'bg-blue-100 text-blue-600') : (isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900')}`}
             title="Configuración"
           >
-            <Type size={24} />
+            <Settings size={24} />
           </button>
         </nav>
-
-        {/* Theme and Font Size Controls */}
-        <div className="mt-auto mb-4 flex flex-col gap-2">
-          <button 
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-2 rounded-lg bg-[#333] hover:bg-[#444] text-gray-400 hover:text-white transition-colors"
-            title={isDarkMode ? 'Modo claro' : 'Modo oscuro'}
-          >
-            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
-          <div className="flex flex-col gap-1 bg-[#333] rounded-lg p-1">
-            <button 
-              onClick={() => setFontSize('small')}
-              className={`text-xs px-2 py-1 rounded ${fontSize === 'small' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-              title="Texto pequeño"
-            >
-              A
-            </button>
-            <button 
-              onClick={() => setFontSize('normal')}
-              className={`text-sm px-2 py-1 rounded ${fontSize === 'normal' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-              title="Texto normal"
-            >
-              A
-            </button>
-            <button 
-              onClick={() => setFontSize('large')}
-              className={`text-base px-2 py-1 rounded ${fontSize === 'large' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-              title="Texto grande"
-            >
-              A
-            </button>
-          </div>
-        </div>
 
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Title Bar Area (Drag Region) */}
-        <div className="h-10 w-full drag flex items-center px-4 bg-[#1a1a1a]">
+        <div className={`h-10 w-full drag flex items-center px-4 ${isDarkMode ? 'bg-[#1a1a1a]' : 'bg-gray-200'}`}>
           <div className="flex-1"></div>
           <div className="flex items-center gap-2">
              <div className={`w-2 h-2 rounded-full ${engineStatus === 'running' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-             <span className="text-xs text-gray-400">
-               {engineStatus === 'running' ? 'Motor Listo' : 'Motor Detenido'}
-             </span>
+              <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                {engineStatus === 'running' ? 'Motor Listo' : 'Motor Detenido'}
+              </span>
           </div>
         </div>
 
         {/* Content */}
         <div className={`flex-1 overflow-auto p-6 ${isDarkMode ? 'bg-[#1a1a1a] text-white' : 'bg-gray-100 text-gray-900'}`}>
-          {activeTab === 'dashboard' && <Dashboard initialStreamId={pendingStream || undefined} />}
+          {activeTab === 'dashboard' && <Dashboard initialStreamId={pendingStream || undefined} isDarkMode={isDarkMode} />}
           {activeTab === 'telegram' && (
             <TelegramTab 
               phone={tgPhone} 
@@ -224,6 +190,7 @@ function App() {
               removeFromFavorites={removeFromFavorites}
               isFavorite={isFavorite}
               getFavoriteMatches={getFavoriteMatches}
+              isDarkMode={isDarkMode}
             />
           )}
           {activeTab === 'settings' && (
