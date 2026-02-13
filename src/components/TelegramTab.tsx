@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List, ArrowUpDown } from 'lucide-react';
+import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List } from 'lucide-react';
 
 // Helper function to clean channel names
 const cleanChannelName = (name: string): string => {
@@ -46,22 +46,15 @@ const TelegramTab = ({
   const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>('event');
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Layout and sorting state
+  // Layout state
   const [layout, setLayout] = useState<'grid' | 'list'>(() => {
     return (localStorage.getItem('channelLayout') as 'grid' | 'list') || 'grid';
   });
-  const [sortBy, setSortBy] = useState<'alphabetical' | 'category'>(() => {
-    return (localStorage.getItem('channelSort') as 'alphabetical' | 'category') || 'alphabetical';
-  });
   
-  // Persist layout and sorting
+  // Persist layout
   useEffect(() => {
     localStorage.setItem('channelLayout', layout);
   }, [layout]);
-  
-  useEffect(() => {
-    localStorage.setItem('channelSort', sortBy);
-  }, [sortBy]);
 
   const sendCommand = async (cmd: string, extra = {}) => {
     setIsLoading(true);
@@ -149,17 +142,7 @@ const TelegramTab = ({
       return matchesCategory && matchesSearch;
     })
     .sort((a, b) => {
-      if (sortBy === 'alphabetical') {
-        return cleanChannelName(a.name).localeCompare(cleanChannelName(b.name), 'es');
-      } else {
-        // Sort by category first, then by name
-        const typeA = a.type || 'channel';
-        const typeB = b.type || 'channel';
-        if (typeA !== typeB) {
-          return typeA.localeCompare(typeB);
-        }
-        return cleanChannelName(a.name).localeCompare(cleanChannelName(b.name), 'es');
-      }
+      return cleanChannelName(a.name).localeCompare(cleanChannelName(b.name), 'es');
     });
 
   // Get favorite matches
@@ -310,16 +293,6 @@ const TelegramTab = ({
                 <List size={20} />
               </button>
             </div>
-            
-            {/* Sort toggle */}
-            <button
-              onClick={() => setSortBy(sortBy === 'alphabetical' ? 'category' : 'alphabetical')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${isDarkMode ? 'bg-[#333] text-gray-400 hover:text-white' : 'bg-gray-200 text-gray-600 hover:text-gray-900'}`}
-              title="Ordenar"
-            >
-              <ArrowUpDown size={18} />
-              <span className="text-sm">{sortBy === 'alphabetical' ? 'A-Z' : 'Tipo'}</span>
-            </button>
           </div>
         </div>
       )}
