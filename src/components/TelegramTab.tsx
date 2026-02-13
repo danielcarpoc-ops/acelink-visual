@@ -1,33 +1,21 @@
 import { useState, useEffect } from 'react';
 import { Send, Phone, RefreshCw, Play } from 'lucide-react';
 
-const TelegramTab = () => {
-  // Config State - Only phone is needed, API ID/Hash come from config.json
-  const [phone, setPhone] = useState(localStorage.getItem('tg_phone') || '');
-  
-  // Auth State
-  const [step, setStep] = useState('config'); // config, code, authorized
+interface TelegramTabProps {
+  phone: string;
+  setPhone: (p: string) => void;
+  step: 'config' | 'code' | 'authorized';
+  setStep: (s: 'config' | 'code' | 'authorized') => void;
+  channels: any[];
+  setChannels: (c: any[]) => void;
+}
+
+const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: TelegramTabProps) => {
   const [code, setCode] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  // Data State
-  const [channels, setChannels] = useState<any[]>([]);
-
-  useEffect(() => {
-    // Save phone when changed
-    localStorage.setItem('tg_phone', phone);
-  }, [phone]);
-
-  // Auto-connect if phone is already saved
-  useEffect(() => {
-    const savedPhone = localStorage.getItem('tg_phone');
-    if (savedPhone && savedPhone !== phone) {
-      setPhone(savedPhone);
-      // Trigger auto-login
-      handleLogin();
-    }
-  }, []);
+  const [phoneCodeHash, setPhoneCodeHash] = useState('');
+  const [activeCategory, setActiveCategory] = useState<'channel' | 'event'>('event');
 
   const sendCommand = async (cmd: string, extra = {}) => {
     setIsLoading(true);
@@ -47,8 +35,6 @@ const TelegramTab = () => {
       return { status: 'error', message: e.message };
     }
   };
-
-  const [phoneCodeHash, setPhoneCodeHash] = useState('');
 
   const handleLogin = async () => {
     if (!phone) {
@@ -92,7 +78,12 @@ const TelegramTab = () => {
     window.dispatchEvent(event);
   };
 
-  const [activeCategory, setActiveCategory] = useState<'channel' | 'event'>('event');
+  // Auto-connect on mount if phone exists
+  useEffect(() => {
+    if (phone && step === 'config') {
+      handleLogin();
+    }
+  }, []);
 
   const filteredChannels = channels.filter(ch => {
       if (activeCategory === 'channel') return ch.type === 'channel' || !ch.type;

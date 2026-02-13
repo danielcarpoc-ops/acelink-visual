@@ -30,6 +30,16 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Telegram State (moved up to persist across tab switches)
+  const [tgPhone, setTgPhone] = useState(localStorage.getItem('tg_phone') || '');
+  const [tgChannels, setTgChannels] = useState<any[]>([]);
+  const [tgStep, setTgStep] = useState<'config' | 'code' | 'authorized'>('config');
+
+  // Persist phone
+  useEffect(() => {
+    if (tgPhone) localStorage.setItem('tg_phone', tgPhone);
+  }, [tgPhone]);
+
   return (
     <div className="flex h-screen bg-[#1a1a1a] text-white">
       {/* Sidebar */}
@@ -76,7 +86,16 @@ function App() {
         {/* Content */}
         <div className="flex-1 overflow-auto p-6">
           {activeTab === 'dashboard' && <Dashboard initialStreamId={pendingStream || undefined} />}
-          {activeTab === 'telegram' && <TelegramTab />}
+          {activeTab === 'telegram' && (
+            <TelegramTab 
+              phone={tgPhone} 
+              setPhone={setTgPhone}
+              step={tgStep}
+              setStep={setTgStep}
+              channels={tgChannels}
+              setChannels={setTgChannels}
+            />
+          )}
           {activeTab === 'history' && <div className="text-center mt-20 text-gray-500">History coming soon...</div>}
         </div>
       </div>
