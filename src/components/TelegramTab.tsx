@@ -49,19 +49,19 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
 
   const handleLogin = async () => {
     if (!phone) {
-      setStatusMsg('Please enter your phone number');
+      setStatusMsg('Por favor, introduce tu número de teléfono');
       return;
     }
     const res = await sendCommand('login');
     if (res.status === 'needs_code') {
       setStep('code');
       setPhoneCodeHash(res.phone_code_hash);
-      setStatusMsg('Code sent to your Telegram app');
+      setStatusMsg('Código enviado a tu app de Telegram');
     } else if (res.status === 'authorized') {
       setStep('authorized');
       fetchChannels();
     } else {
-      setStatusMsg(res.message || 'Unknown error');
+      setStatusMsg(res.message || 'Error desconocido');
     }
   };
 
@@ -71,7 +71,7 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
       setStep('authorized');
       fetchChannels();
     } else {
-      setStatusMsg(res.message || 'Invalid code');
+      setStatusMsg(res.message || 'Código inválido');
     }
   };
 
@@ -80,7 +80,7 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
     if (res.status === 'success') {
       setChannels(res.data);
     } else {
-      setStatusMsg(res.message || 'Failed to fetch');
+      setStatusMsg(res.message || 'Error al obtener canales');
     }
   };
 
@@ -106,12 +106,12 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
     return (
       <div className="max-w-2xl mx-auto p-6 bg-[#242424] rounded-2xl shadow-xl">
         <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-          <Send size={24} className="text-blue-400" /> Telegram Setup
+          <Send size={24} className="text-blue-400" /> Configuración de Telegram
         </h2>
         
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2"><Phone size={14}/> Phone Number</label>
+            <label className="block text-sm text-gray-400 mb-1 flex items-center gap-2"><Phone size={14}/> Número de Teléfono</label>
             <input 
               type="text" 
               value={phone}
@@ -119,7 +119,7 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
               className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-4 py-2 text-white"
               placeholder="+34600000000"
             />
-            <p className="text-xs text-gray-500 mt-1">API credentials are loaded from config.json</p>
+            <p className="text-xs text-gray-500 mt-1">Las credenciales API se cargan desde config.json</p>
           </div>
 
           <button 
@@ -127,7 +127,7 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
             disabled={isLoading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
           >
-            {isLoading ? 'Connecting...' : 'Connect'}
+            {isLoading ? 'Conectando...' : 'Conectar'}
           </button>
           
           {statusMsg && <p className="text-red-400 text-sm mt-2">{statusMsg}</p>}
@@ -139,8 +139,8 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
   if (step === 'code') {
     return (
       <div className="max-w-md mx-auto p-6 bg-[#242424] rounded-2xl shadow-xl text-center">
-        <h2 className="text-xl font-bold mb-4">Enter Code</h2>
-        <p className="text-gray-400 mb-6 text-sm">We sent a code to your Telegram app.</p>
+        <h2 className="text-xl font-bold mb-4">Introduce el Código</h2>
+        <p className="text-gray-400 mb-6 text-sm">Hemos enviado un código a tu app de Telegram.</p>
         
         <input 
           type="text" 
@@ -155,7 +155,7 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
           disabled={isLoading}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
         >
-          {isLoading ? 'Verifying...' : 'Submit Code'}
+          {isLoading ? 'Verificando...' : 'Enviar Código'}
         </button>
         {statusMsg && <p className="text-red-400 text-sm mt-2">{statusMsg}</p>}
       </div>
@@ -172,13 +172,13 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
                onClick={() => setActiveCategory('channel')}
                className={`px-4 py-1 rounded-md text-sm font-medium transition-colors ${activeCategory === 'channel' ? 'bg-[#444] text-white shadow' : 'text-gray-400 hover:text-white'}`}
              >
-               Channels
+               Canales
              </button>
              <button 
                onClick={() => setActiveCategory('event')}
                className={`px-4 py-1 rounded-md text-sm font-medium transition-colors ${activeCategory === 'event' ? 'bg-[#444] text-white shadow' : 'text-gray-400 hover:text-white'}`}
              >
-               Live Events
+               Eventos en Directo
              </button>
         </div>
 
@@ -186,7 +186,7 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
           onClick={fetchChannels}
           disabled={isLoading}
           className="p-2 bg-[#333] hover:bg-[#444] rounded-lg transition-colors"
-          title="Refresh"
+          title="Actualizar"
         >
           <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
         </button>
@@ -194,13 +194,13 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
 
       {channels.length === 0 ? (
         <div className="text-center py-20 text-gray-500">
-          <p>No streams found yet.</p>
-          <button onClick={fetchChannels} className="text-blue-400 mt-2 underline">Try scanning now</button>
+          <p>Aún no se han encontrado streams.</p>
+          <button onClick={fetchChannels} className="text-blue-400 mt-2 underline">Intentar escanear ahora</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredChannels.length === 0 && (
-             <div className="col-span-full text-center py-10 text-gray-500">No content found in this category.</div>
+             <div className="col-span-full text-center py-10 text-gray-500">No se encontró contenido en esta categoría.</div>
           )}
           {filteredChannels.map((ch, idx) => (
             <div key={idx} className="bg-[#242424] p-4 rounded-xl border border-[#333] hover:border-blue-500/50 transition-all group">
@@ -211,7 +211,7 @@ const TelegramTab = ({ phone, setPhone, step, setStep, channels, setChannels }: 
                 onClick={() => playChannel(ch.id)}
                 className="w-full bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
               >
-                <Play size={16} /> Play Now
+                <Play size={16} /> Reproducir Ahora
               </button>
             </div>
           ))}

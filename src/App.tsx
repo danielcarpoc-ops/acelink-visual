@@ -52,14 +52,14 @@ function App() {
           <button 
             onClick={() => setActiveTab('telegram')}
             className={`p-3 rounded-xl transition-all ${activeTab === 'telegram' ? 'bg-[#333] text-blue-400' : 'text-gray-400 hover:text-white'}`}
-            title="Channels"
+            title="Canales"
           >
             <Tv size={24} />
           </button>
           <button 
             onClick={() => setActiveTab('dashboard')}
             className={`p-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-[#333] text-blue-400' : 'text-gray-400 hover:text-white'}`}
-            title="Player"
+            title="Reproductor"
           >
             <Play size={24} />
           </button>
@@ -76,7 +76,7 @@ function App() {
           <div className="flex items-center gap-2">
              <div className={`w-2 h-2 rounded-full ${engineStatus === 'running' ? 'bg-green-500' : 'bg-red-500'}`}></div>
              <span className="text-xs text-gray-400">
-               {engineStatus === 'running' ? 'Engine Ready' : 'Engine Stopped'}
+               {engineStatus === 'running' ? 'Motor Listo' : 'Motor Detenido'}
              </span>
           </div>
         </div>
@@ -94,7 +94,7 @@ function App() {
               setChannels={setTgChannels}
             />
           )}
-          {activeTab === 'history' && <div className="text-center mt-20 text-gray-500">History coming soon...</div>}
+          {activeTab === 'history' && <div className="text-center mt-20 text-gray-500">Historial próximamente...</div>}
         </div>
       </div>
     </div>

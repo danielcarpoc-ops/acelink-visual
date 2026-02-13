@@ -51,10 +51,10 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
 
         hlsRef.current.on(Hls.Events.MANIFEST_PARSED, () => {
           console.log('HLS manifest parsed, starting playback...');
-          setStatus('Buffering...');
+          setStatus('Cargando...');
           video.play().catch(err => {
             console.log('Auto-play prevented:', err);
-            setStatus('Click play to start');
+            setStatus('Pulsa play para iniciar');
           });
         });
 
@@ -64,33 +64,33 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
-                setStatus('Network error - retrying...');
+                setStatus('Error de red - reintentando...');
                 hlsRef.current?.startLoad();
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
-                setStatus('Media error - recovering...');
+                setStatus('Error de medios - recuperando...');
                 hlsRef.current?.recoverMediaError();
                 break;
               default:
-                setStatus('Fatal error - use VLC');
-                setError('Stream error. Try opening in VLC for better compatibility.');
+                setStatus('Error fatal - usa VLC');
+                setError('Error en el stream. Intenta abrirlo en VLC para mejor compatibilidad.');
                 break;
             }
           }
         });
 
         hlsRef.current.on(Hls.Events.FRAG_LOADED, () => {
-          setStatus('Playing');
+          setStatus('Reproduciendo');
         });
 
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         // Native HLS support (Safari)
         console.log('Using native HLS support');
         video.src = streamUrl;
-        setStatus('Native playback');
+        setStatus('Reproducción nativa');
       } else {
-        setError('Your browser does not support HLS playback');
-        setStatus('Not supported');
+        setError('Tu navegador no soporta la reproducción HLS');
+        setStatus('No soportado');
       }
     }
 
@@ -108,14 +108,14 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
     if (!targetId) return;
     setLoading(true);
     setError('');
-    setStatus('Initializing...');
+    setStatus('Inicializando...');
     setIsPlaying(false);
 
     const cleanId = targetId.replace('acestream://', '').trim();
 
     try {
       if (!window.electronAPI) {
-        throw new Error('Electron API not available');
+        throw new Error('API de Electron no disponible');
       }
       
       // Get proxy URL - we'll use the manifest endpoint for HLS
@@ -126,7 +126,7 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
       setStreamUrl(hlsUrl);
       
       // Wait for engine to buffer
-      setStatus('Waiting for Ace Stream engine...');
+      setStatus('Esperando al motor de Ace Stream...');
       await new Promise(resolve => setTimeout(resolve, 5000));
       
       setIsPlaying(true);
@@ -134,7 +134,7 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
 
     } catch (err: any) {
       console.error('Play Error:', err);
-      setError(`Failed to get stream: ${err.message}`);
+      setError(`Error al obtener el stream: ${err.message}`);
       setLoading(false);
       setStatus('Error');
     }
@@ -150,18 +150,18 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
     <div className="max-w-4xl mx-auto">
       <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
         <Tv className="text-blue-500" />
-        Stream Player
+        Reproductor de Streams
       </h2>
 
       {/* Input Section */}
       <div className="bg-[#242424] p-6 rounded-2xl mb-8 shadow-lg">
-        <label className="block text-sm text-gray-400 mb-2">Ace Stream ID or Magnet Link</label>
+        <label className="block text-sm text-gray-400 mb-2">ID de Ace Stream o Enlace Magnet</label>
         <div className="flex gap-3">
           <input 
             type="text" 
             value={streamId}
             onChange={(e) => setStreamId(e.target.value)}
-            placeholder="e.g. 23894723847238947..."
+            placeholder="ej. 23894723847238947..."
             className="flex-1 bg-[#1a1a1a] border border-[#333] rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 text-white transition-colors"
           />
           <button 
@@ -169,7 +169,7 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
             disabled={loading}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
           >
-            {loading ? 'Loading...' : <><Play size={18} /> Play</>}
+            {loading ? 'Cargando...' : <><Play size={18} /> Reproducir</>}
           </button>
         </div>
         
@@ -181,7 +181,7 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
               className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
             >
               <ExternalLink size={16} />
-              Open in VLC
+              Abrir en VLC
             </button>
           </div>
         )}
@@ -200,7 +200,7 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
           />
           
           {/* Status overlay */}
-          {status && status !== 'Playing' && (
+          {status && status !== 'Reproduciendo' && (
             <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-sm text-gray-300">
               {status}
             </div>
@@ -215,14 +215,14 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
                   }
                 }}
                 className="bg-black/50 backdrop-blur-md p-2 rounded-lg text-white hover:bg-white/20 transition-colors"
-                title="Toggle Mute"
+                title="Silenciar/Activar sonido"
               >
                 {videoRef.current?.muted ? '🔇' : '🔊'}
               </button>
               <button 
                 onClick={openVLC}
                 className="bg-orange-600 hover:bg-orange-700 text-white p-2 rounded-lg transition-colors flex items-center gap-2 shadow-lg"
-                title="Open in VLC"
+                title="Abrir en VLC"
               >
                 <ExternalLink size={18} />
                 <span className="text-sm font-medium">VLC</span>
@@ -241,16 +241,16 @@ const Dashboard = ({ initialStreamId }: DashboardProps) => {
             <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center mb-4 group-hover:bg-orange-500/20 transition-colors">
               <ExternalLink className="text-orange-500" size={24} />
             </div>
-            <h3 className="text-xl font-semibold mb-2 text-orange-400">Open in VLC</h3>
-            <p className="text-gray-400 text-sm">Best compatibility with all Ace Stream channels and codecs.</p>
+            <h3 className="text-xl font-semibold mb-2 text-orange-400">Abrir en VLC</h3>
+            <p className="text-gray-400 text-sm">Mejor compatibilidad con todos los canales y códecs de Ace Stream.</p>
           </div>
 
           <div className="bg-[#242424] p-6 rounded-2xl border border-[#333]">
             <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center mb-4">
               <Play className="text-blue-500" size={24} />
             </div>
-            <h3 className="text-xl font-semibold mb-2">Built-in Player</h3>
-            <p className="text-gray-400 text-sm">Uses HLS streaming for better browser compatibility.</p>
+            <h3 className="text-xl font-semibold mb-2">Reproductor Integrado</h3>
+            <p className="text-gray-400 text-sm">Usa streaming HLS para mejor compatibilidad con el navegador.</p>
           </div>
         </div>
       )}
