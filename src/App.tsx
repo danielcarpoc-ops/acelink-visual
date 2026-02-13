@@ -1,0 +1,87 @@
+import { useState, useEffect } from 'react';
+import { Activity, Play, List, Settings, Send } from 'lucide-react';
+import Dashboard from './components/Dashboard';
+import TelegramTab from './components/TelegramTab';
+
+function App() {
+  const [engineStatus, setEngineStatus] = useState<string>('checking');
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [pendingStream, setPendingStream] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Listen for play requests from other tabs
+    const handlePlayStream = (e: any) => {
+        setPendingStream(e.detail);
+        setActiveTab('dashboard');
+    };
+    
+    window.addEventListener('play-stream', handlePlayStream);
+    return () => window.removeEventListener('play-stream', handlePlayStream);
+  }, []);
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      const status = await window.electronAPI.checkDockerStatus();
+      setEngineStatus(status);
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex h-screen bg-[#1a1a1a] text-white">
+      {/* Sidebar */}
+      <div className="w-20 bg-[#242424] flex flex-col items-center py-6 border-r border-[#333] pt-12 drag">
+        <div className="mb-8 p-2 bg-blue-600 rounded-lg no-drag">
+          <Activity size={24} color="white" />
+        </div>
+        
+        <nav className="flex flex-col gap-4 w-full items-center no-drag">
+          <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={`p-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-[#333] text-blue-400' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Play size={24} />
+          </button>
+          <button 
+            onClick={() => setActiveTab('telegram')}
+            className={`p-3 rounded-xl transition-all ${activeTab === 'telegram' ? 'bg-[#333] text-blue-400' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Send size={24} />
+          </button>
+        </nav>
+
+        <div className="mt-auto no-drag">
+          <button className="p-3 text-gray-500 hover:text-white">
+            <Settings size={24} />
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Title Bar Area (Drag Region) */}
+        <div className="h-10 w-full drag flex items-center px-4 bg-[#1a1a1a]">
+          <div className="flex-1"></div>
+          <div className="flex items-center gap-2">
+             <div className={`w-2 h-2 rounded-full ${engineStatus === 'running' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+             <span className="text-xs text-gray-400">
+               {engineStatus === 'running' ? 'Engine Ready' : 'Engine Stopped'}
+             </span>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto p-6">
+          {activeTab === 'dashboard' && <Dashboard initialStreamId={pendingStream || undefined} />}
+          {activeTab === 'telegram' && <TelegramTab />}
+          {activeTab === 'history' && <div className="text-center mt-20 text-gray-500">History coming soon...</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;
