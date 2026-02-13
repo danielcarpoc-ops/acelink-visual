@@ -19,6 +19,16 @@ const TelegramTab = () => {
     localStorage.setItem('tg_phone', phone);
   }, [phone]);
 
+  // Auto-connect if phone is already saved
+  useEffect(() => {
+    const savedPhone = localStorage.getItem('tg_phone');
+    if (savedPhone && savedPhone !== phone) {
+      setPhone(savedPhone);
+      // Trigger auto-login
+      handleLogin();
+    }
+  }, []);
+
   const sendCommand = async (cmd: string, extra = {}) => {
     setIsLoading(true);
     setStatusMsg('');
