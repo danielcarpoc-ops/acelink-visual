@@ -7,6 +7,10 @@ interface ChromecastDevice {
 
 contextBridge.exposeInMainWorld('electronAPI', {
   checkDockerStatus: () => ipcRenderer.invoke('check-docker-status'),
+  startEngine: () => ipcRenderer.invoke('start-engine'),
+  readConfig: () => ipcRenderer.invoke('read-config'),
+  writeConfig: (configData: any) => ipcRenderer.invoke('write-config', configData),
+  getCurrentEpg: () => ipcRenderer.invoke('get-current-epg'),
   getStreamUrl: (id: string) => ipcRenderer.invoke('get-stream-url', id),
   getProxyUrl: (id: string) => ipcRenderer.invoke('get-proxy-url', id),
   openVlc: (url: string) => ipcRenderer.invoke('open-vlc', url),

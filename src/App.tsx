@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Play, Tv, Sun, Moon, Settings } from 'lucide-react';
+import { Play, Tv, Sun, Moon, Settings, RefreshCw } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import TelegramTab from './components/TelegramTab';
 
 function App() {
   const [engineStatus, setEngineStatus] = useState<string>('checking');
+  const [isStartingEngine, setIsStartingEngine] = useState(false);
   const [activeTab, setActiveTab] = useState('telegram');
   const [pendingStream, setPendingStream] = useState<string | null>(null);
   
@@ -78,6 +79,19 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleRestartEngine = async () => {
+    setIsStartingEngine(true);
+    try {
+      await window.electronAPI.startEngine();
+      const status = await window.electronAPI.checkDockerStatus();
+      setEngineStatus(status);
+    } catch (e) {
+      console.error('Failed to start engine', e);
+    } finally {
+      setIsStartingEngine(false);
+    }
+  };
+
   // Telegram State (moved up to persist across tab switches)
   interface Channel {
     id: number;
@@ -87,6 +101,49 @@ function App() {
   const [tgPhone, setTgPhone] = useState(localStorage.getItem('tg_phone') || '');
   const [tgChannels, setTgChannels] = useState<Channel[]>([]);
   const [tgStep, setTgStep] = useState<'config' | 'code' | 'authorized'>('config');
+
+  // Settings State for Telegram Config
+  const [apiId, setApiId] = useState('');
+  const [apiHash, setApiHash] = useState('');
+  const [settingsPhone, setSettingsPhone] = useState(tgPhone);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState('');
+
+  // Fetch config when switching to settings
+  useEffect(() => {
+    if (activeTab === 'settings') {
+      window.electronAPI.readConfig().then(config => {
+        setApiId(config.api_id ? String(config.api_id) : '');
+        setApiHash(config.api_hash || '');
+      });
+      setSettingsPhone(tgPhone);
+      setSettingsMsg('');
+    }
+  }, [activeTab, tgPhone]);
+
+  const handleSaveSettings = async () => {
+    setIsSavingSettings(true);
+    setSettingsMsg('');
+    try {
+      const success = await window.electronAPI.writeConfig({
+        api_id: parseInt(apiId, 10) || apiId,
+        api_hash: apiHash
+      });
+      if (success) {
+        setTgPhone(settingsPhone);
+        if (settingsPhone !== tgPhone) {
+          setTgStep('config'); // Force re-login if phone changed
+        }
+        setSettingsMsg('Configuración guardada correctamente.');
+      } else {
+        setSettingsMsg('Error al guardar la configuración.');
+      }
+    } catch (e) {
+      setSettingsMsg('Error: ' + String(e));
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
 
   // Persist phone
   useEffect(() => {
@@ -192,6 +249,21 @@ function App() {
               <span className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                 {engineStatus === 'running' ? 'Motor Listo' : 'Motor Detenido'}
               </span>
+              {engineStatus !== 'running' && (
+                <button 
+                  onClick={handleRestartEngine}
+                  disabled={isStartingEngine}
+                  className={`no-drag flex items-center gap-1 px-2 py-1 ml-2 text-xs rounded transition-colors ${
+                    isDarkMode 
+                      ? 'bg-[#333] hover:bg-[#444] text-white disabled:bg-[#222]' 
+                      : 'bg-white hover:bg-gray-100 text-gray-900 shadow-sm border border-gray-200 disabled:bg-gray-50'
+                  } disabled:opacity-50`}
+                  title="Relanzar Motor"
+                >
+                  <RefreshCw size={12} className={isStartingEngine ? 'animate-spin' : ''} />
+                  {isStartingEngine ? 'Iniciando...' : 'Relanzar'}
+                </button>
+              )}
           </div>
         </div>
 
@@ -256,6 +328,54 @@ function App() {
                         </button>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                <div className={`p-6 rounded-2xl shadow-lg ${isDarkMode ? 'bg-[#242424]' : 'bg-white'}`}>
+                  <h3 className="text-xl font-semibold mb-4">API de Telegram</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className={`block text-sm mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>API ID</label>
+                      <input 
+                        type="text" 
+                        value={apiId}
+                        onChange={e => setApiId(e.target.value)}
+                        className={`w-full border rounded-lg px-4 py-2 ${isDarkMode ? 'bg-[#1a1a1a] border-[#333] text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
+                        placeholder="ej. 32453871"
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-sm mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>API Hash</label>
+                      <input 
+                        type="text" 
+                        value={apiHash}
+                        onChange={e => setApiHash(e.target.value)}
+                        className={`w-full border rounded-lg px-4 py-2 ${isDarkMode ? 'bg-[#1a1a1a] border-[#333] text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
+                        placeholder="Tu API Hash"
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-sm mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Teléfono</label>
+                      <input 
+                        type="text" 
+                        value={settingsPhone}
+                        onChange={e => setSettingsPhone(e.target.value)}
+                        className={`w-full border rounded-lg px-4 py-2 ${isDarkMode ? 'bg-[#1a1a1a] border-[#333] text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
+                        placeholder="+34600000000"
+                      />
+                    </div>
+                    <button 
+                      onClick={handleSaveSettings}
+                      disabled={isSavingSettings}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl transition-colors disabled:opacity-50 mt-4"
+                    >
+                      {isSavingSettings ? 'Guardando...' : 'Guardar Configuración'}
+                    </button>
+                    {settingsMsg && (
+                      <p className={`text-sm mt-2 ${settingsMsg.includes('Error') ? 'text-red-400' : 'text-green-400'}`}>
+                        {settingsMsg}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

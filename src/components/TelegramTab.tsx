@@ -12,10 +12,39 @@ const cleanChannelName = (name: string): string => {
     .trim();
 };
 
+const normalizeForEpgMatch = (name: string): string => {
+  if (!name) return '';
+  let s = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  s = s.replace(/^(movistar|m\+|m\.|m\s+)/, '');
+  s = s.replace(/\b(hd|fhd|uhd|4k|1080p|1080|720p|720)\b/g, '');
+  s = s.replace(/[^\w]/g, '');
+  return s;
+};
+
+const findEpgMatch = (channelName: string, epgList: EPGProgram[]): EPGProgram | null => {
+  const normCh = normalizeForEpgMatch(channelName);
+  if (!normCh) return null;
+  
+  for (const prog of epgList) {
+    if (prog.names.some(epgName => normalizeForEpgMatch(epgName) === normCh)) {
+      return prog;
+    }
+  }
+  return null;
+};
+
 interface Channel {
   id: number;
   name: string;
   type?: 'channel' | 'event';
+}
+
+interface EPGProgram {
+  id: string;
+  names: string[];
+  title: string;
+  start: number;
+  stop: number;
 }
 
 interface TelegramResponse {
@@ -59,9 +88,10 @@ const TelegramTab = ({
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [phoneCodeHash, setPhoneCodeHash] = useState('');
   const [codeType, setCodeType] = useState('');
+  const [epgData, setEpgData] = useState<EPGProgram[]>([]);
   const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>('event');
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Layout state
   const [layout, setLayout] = useState<'grid' | 'list'>(() => {
     return (localStorage.getItem('channelLayout') as 'grid' | 'list') || 'grid';
@@ -168,6 +198,36 @@ const TelegramTab = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phone, step]);
 
+  // Fetch EPG on load and poll every 60 seconds
+  useEffect(() => {
+    let timeoutId: number;
+    
+    const fetchEPG = async () => {
+      try {
+        const epg = await window.electronAPI.getCurrentEpg();
+        console.log("EPG data received:", epg?.length, "channels");
+        if (epg && Array.isArray(epg)) {
+          setEpgData(epg);
+          
+          // If EPG is empty, it might still be downloading in the main process
+          // Retry after 2 seconds
+          if (epg.length === 0) {
+            timeoutId = window.setTimeout(fetchEPG, 2000);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch EPG from main process', err);
+      }
+    };
+    
+    fetchEPG();
+    const interval = setInterval(fetchEPG, 60000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
   // Filter and sort channels
   const filteredChannels = channels
     .filter(ch => {
@@ -191,6 +251,23 @@ const TelegramTab = ({
 
   // Get favorite matches
   const favoriteMatches = getFavoriteMatches();
+
+  const renderEPG = (channelName: string) => {
+    const match = findEpgMatch(channelName, epgData);
+    if (!match) return null;
+    
+    const start = new Date(match.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const stop = new Date(match.stop).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    return (
+      <div className={`text-xs mt-1 flex items-center gap-1.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+        <span className="font-medium truncate" title={`${start} - ${stop} | ${match.title}`}>
+          {start} - {stop} | {match.title}
+        </span>
+      </div>
+    );
+  };
 
   if (step === 'config') {
     return (
@@ -386,7 +463,11 @@ const TelegramTab = ({
                   <h3 className={`font-bold text-lg truncate flex-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(item.channel.name)}</h3>
                   <Star className="text-yellow-500 shrink-0" size={18} fill="currentColor" />
                 </div>
-                <p className={`text-xs mb-4 font-mono truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{item.channel.id}</p>
+                <p className={`text-xs mb-2 font-mono truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{item.channel.id}</p>
+                
+                <div className="mb-4 h-[24px]">
+                  {renderEPG(item.channel.name)}
+                </div>
                 
                 <div className="flex gap-2">
                   <button 
@@ -435,7 +516,11 @@ const TelegramTab = ({
                       <Star size={18} fill={isFavorite(ch.name) ? 'currentColor' : 'none'} />
                     </button>
                   </div>
-                  <p className={`text-xs mb-4 font-mono truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{ch.id}</p>
+                  <p className={`text-xs mb-2 font-mono truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{ch.id}</p>
+                  
+                  <div className="mb-4 h-[24px]">
+                    {renderEPG(ch.name)}
+                  </div>
                   
                   <button 
                     onClick={() => playChannel(String(ch.id))}
@@ -448,7 +533,8 @@ const TelegramTab = ({
                 <>
                   <div className="flex-1 min-w-0">
                     <h3 className={`font-bold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(ch.name)}</h3>
-                    <p className={`text-xs font-mono truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{ch.id}</p>
+                    <p className={`text-xs font-mono truncate mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{ch.id}</p>
+                    {renderEPG(ch.name)}
                   </div>
                   <button
                     onClick={() => {

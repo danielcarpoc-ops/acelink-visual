@@ -8,6 +8,10 @@ interface ChromecastDevice {
 interface Window {
   electronAPI: {
     checkDockerStatus: () => Promise<string>;
+    startEngine: () => Promise<boolean>;
+    readConfig: () => Promise<{ api_id: string | number; api_hash: string }>;
+    writeConfig: (configData: { api_id: string | number; api_hash: string }) => Promise<boolean>;
+    getCurrentEpg: () => Promise<any[]>;
     getStreamUrl: (id: string) => Promise<string>;
     getProxyUrl: (id: string) => Promise<string>;
     openVlc: (url: string) => Promise<void>;

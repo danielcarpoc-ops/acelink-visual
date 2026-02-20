@@ -7,6 +7,7 @@ import url from 'url';
 import util from 'util';
 import { createRequire } from 'module';
 import fs from 'fs';
+import { fetchEPG, getCurrentPrograms } from './epg';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -348,6 +349,10 @@ app.whenReady().then(async () => {
   bootstrapUserData();
   createWindow();
   startAceEngine();
+  
+  // EPG initialization
+  fetchEPG();
+  setInterval(fetchEPG, 3600000); // refresh every hour
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -366,6 +371,11 @@ app.on('before-quit', async () => {
 });
 
 // IPC Handlers
+ipcMain.handle('start-engine', async () => {
+  await startAceEngine();
+  return true;
+});
+
 ipcMain.handle('check-docker-status', async () => {
   try {
     await execAsync('docker ps');
@@ -374,6 +384,48 @@ ipcMain.handle('check-docker-status', async () => {
     return stdout.trim() === 'acelink-engine' ? 'running' : 'stopped';
   } catch {
     return 'docker-not-found';
+  }
+});
+
+ipcMain.handle('read-config', async () => {
+  try {
+    const userDataPath = app.getPath('userData');
+    const destConfig = path.join(userDataPath, 'config.json');
+    
+    // 1. Try to read from writable userData path
+    if (fs.existsSync(destConfig)) {
+      const data = fs.readFileSync(destConfig, 'utf8');
+      return JSON.parse(data);
+    }
+
+    // 2. Fallback to read-only app resources if userData config doesn't exist yet
+    const srcConfig = app.isPackaged
+      ? path.join(process.resourcesPath, 'config.json')
+      : path.join(__dirname, '../config.json');
+
+    if (fs.existsSync(srcConfig)) {
+      const data = fs.readFileSync(srcConfig, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.error('Failed to read config.json:', err);
+  }
+  return { api_id: '', api_hash: '' };
+});
+
+ipcMain.handle('get-current-epg', () => {
+  return getCurrentPrograms();
+});
+
+ipcMain.handle('write-config', async (event, configData) => {
+  try {
+    const userDataPath = app.getPath('userData');
+    const destConfig = path.join(userDataPath, 'config.json');
+    fs.writeFileSync(destConfig, JSON.stringify(configData, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error('Failed to write config.json:', err);
+    return false;
   }
 });
 
