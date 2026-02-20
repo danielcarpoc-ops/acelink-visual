@@ -33,3 +33,6 @@ python/debug_session.session
 python/telegram_session.session
 python/test_telegram.py
 config.json
+
+release/
+dist-electron/

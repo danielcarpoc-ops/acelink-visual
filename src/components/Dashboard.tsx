@@ -5,7 +5,6 @@ import {
   RefreshCw, 
   PictureInPicture, 
   Monitor, 
-  Settings, 
   Cast,
   Circle,
   Square,
@@ -18,12 +17,9 @@ interface DashboardProps {
   isDarkMode: boolean;
 }
 
-// Cast SDK types
-declare global {
-  interface Window {
-    cast?: any;
-    chrome?: any;
-  }
+interface ChromecastDevice {
+  name: string;
+  host: string;
 }
 
 const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
@@ -42,19 +38,15 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   
-  // Quality selector state
-  const [qualityLevels, setQualityLevels] = useState<{level: number; height: number; width: number}[]>([]);
-  const [currentQuality, setCurrentQuality] = useState<number>(-1);
-  const [showQualityMenu, setShowQualityMenu] = useState(false);
-  
   // PiP and Always on Top state
   const [isPiPActive, setIsPiPActive] = useState(false);
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false);
   
   // Chromecast state
-  const [isCastAvailable, setIsCastAvailable] = useState(false);
+  const [chromecastDevices, setChromecastDevices] = useState<ChromecastDevice[]>([]);
   const [isCasting, setIsCasting] = useState(false);
-  const castContextRef = useRef<any>(null);
+  const [currentCastDevice, setCurrentCastDevice] = useState<string>('');
+  const [showCastMenu, setShowCastMenu] = useState(false);
   
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -67,41 +59,34 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
         const cleanId = initialStreamId.replace('acestream://', '').trim();
         setTimeout(() => handlePlay(cleanId), 100);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialStreamId]);
 
-  // Initialize Cast SDK
+  // Initialize Chromecast
   useEffect(() => {
-    const initializeCast = () => {
-      if (window.cast && window.chrome && window.chrome.cast) {
-        const castContext = window.cast.framework.CastContext.getInstance();
-        castContext.setOptions({
-          receiverApplicationId: window.chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
-          autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
-        });
-        
-        castContextRef.current = castContext;
-        
-        // Listen for cast state changes
-        castContext.addEventListener(
-          window.cast.framework.CastContextEventType.CAST_STATE_CHANGED,
-          (event: any) => {
-            setIsCasting(event.castState === window.cast.framework.CastState.CONNECTED);
-          }
-        );
-        
-        setIsCastAvailable(true);
-      }
-    };
+    // Get initial list of devices
+    window.electronAPI?.chromecastGetDevices().then((devices: ChromecastDevice[]) => {
+      setChromecastDevices(devices);
+    });
 
-    // Load Cast SDK
-    if (!window.cast) {
-      const script = document.createElement('script');
-      script.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
-      script.onload = initializeCast;
-      document.body.appendChild(script);
-    } else {
-      initializeCast();
-    }
+    // Listen for device updates
+    const unsubscribeDevices = window.electronAPI?.onChromecastDevicesUpdated((devices: ChromecastDevice[]) => {
+      setChromecastDevices(devices);
+    });
+
+    // Listen for status changes
+    const unsubscribeStatus = window.electronAPI?.onChromecastStatusChanged((status: { isCasting: boolean; device?: string }) => {
+      setIsCasting(status.isCasting);
+      if (status.device) {
+        setCurrentCastDevice(status.device);
+      }
+    });
+
+    return () => {
+      // Cleanup listeners
+      unsubscribeDevices?.();
+      unsubscribeStatus?.();
+    };
   }, []);
 
   // Retry function
@@ -152,14 +137,7 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
         hlsRef.current.loadSource(streamUrl);
         hlsRef.current.attachMedia(video);
 
-        hlsRef.current.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-          setQualityLevels(data.levels.map((level, idx) => ({
-            level: idx,
-            height: level.height,
-            width: level.width
-          })));
-          setCurrentQuality(hlsRef.current?.currentLevel ?? -1);
-          
+        hlsRef.current.on(Hls.Events.MANIFEST_PARSED, () => {
           setStatus('Cargando...');
           video.play().catch(err => {
             console.log('Auto-play prevented:', err);
@@ -193,10 +171,6 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
           setStatus('Reproduciendo');
           setRetryCount(0);
           retryCountRef.current = 0;
-        });
-
-        hlsRef.current.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
-          setCurrentQuality(data.level);
         });
 
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -244,8 +218,9 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
       setIsPlaying(true);
       setLoading(false);
 
-    } catch (err: any) {
-      setError(`Error al obtener el stream: ${err.message}`);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(`Error al obtener el stream: ${errorMessage}`);
       setLoading(false);
       setStatus('Error');
     }
@@ -255,14 +230,6 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
     if (!streamId) return;
     const url = await window.electronAPI.getStreamUrl(streamId);
     await window.electronAPI.openVlc(url);
-  };
-
-  const handleQualityChange = (level: number) => {
-    if (hlsRef.current) {
-      hlsRef.current.currentLevel = level;
-      setCurrentQuality(level);
-      setShowQualityMenu(false);
-    }
   };
 
   const togglePiP = async () => {
@@ -284,13 +251,14 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
   useEffect(() => {
     const handleEnterPiP = () => setIsPiPActive(true);
     const handleLeavePiP = () => setIsPiPActive(false);
+    const video = videoRef.current;
     
-    videoRef.current?.addEventListener('enterpictureinpicture', handleEnterPiP);
-    videoRef.current?.addEventListener('leavepictureinpicture', handleLeavePiP);
+    video?.addEventListener('enterpictureinpicture', handleEnterPiP);
+    video?.addEventListener('leavepictureinpicture', handleLeavePiP);
     
     return () => {
-      videoRef.current?.removeEventListener('enterpictureinpicture', handleEnterPiP);
-      videoRef.current?.removeEventListener('leavepictureinpicture', handleLeavePiP);
+      video?.removeEventListener('enterpictureinpicture', handleEnterPiP);
+      video?.removeEventListener('leavepictureinpicture', handleLeavePiP);
     };
   }, []);
 
@@ -306,26 +274,33 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
 
   // Chromecast functions
   const toggleCast = async () => {
-    if (!castContextRef.current) return;
+    if (isCasting) {
+      try {
+        await window.electronAPI?.chromecastStop();
+        setIsCasting(false);
+        setCurrentCastDevice('');
+      } catch (err) {
+        console.error('Cast stop error:', err);
+      }
+    } else {
+      setShowCastMenu(!showCastMenu);
+    }
+  };
+
+  const startCasting = async (deviceName: string) => {
+    if (!streamUrl) return;
     
     try {
-      if (isCasting) {
-        castContextRef.current.endCurrentSession(true);
-      } else {
-        await castContextRef.current.requestSession();
-        
-        // Load media after connecting
-        if (streamUrl) {
-          const mediaInfo = new window.chrome.cast.media.MediaInfo(streamUrl, 'application/x-mpegURL');
-          const request = new window.chrome.cast.media.LoadRequest(mediaInfo);
-          
-          const session = castContextRef.current.getCurrentSession();
-          await session.loadMedia(request);
-        }
+      const result = await window.electronAPI?.chromecastStart(deviceName, streamUrl);
+      if (result?.success) {
+        setIsCasting(true);
+        setCurrentCastDevice(result.device);
       }
     } catch (err) {
-      console.error('Cast error:', err);
+      console.error('Cast start error:', err);
+      setError(`Error al conectar con ${deviceName}`);
     }
+    setShowCastMenu(false);
   };
 
   // Recording functions
@@ -333,7 +308,7 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
     if (!videoRef.current) return;
     
     try {
-      const stream = (videoRef.current as any).captureStream();
+      const stream = (videoRef.current as HTMLVideoElement & { captureStream(): MediaStream }).captureStream();
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp9,opus'
       });
@@ -518,52 +493,43 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
                 {isRecording ? <Square size={18} /> : <Circle size={18} className="fill-red-500" />}
               </button>
 
-              {/* Chromecast */}
-              {isCastAvailable && (
-                <button 
-                  onClick={toggleCast}
-                  className={`p-2 rounded-lg transition-colors ${isCasting ? 'bg-blue-600 text-white' : 'bg-black/50 backdrop-blur-md text-white hover:bg-white/20'}`}
-                  title={isCasting ? 'Desconectar Chromecast' : 'Enviar a TV (Chromecast)'}
-                >
-                  <Cast size={18} />
-                </button>
-              )}
+               {/* Chromecast */}
+               <div className="relative">
+                 <button 
+                   onClick={toggleCast}
+                   className={`p-2 rounded-lg transition-colors ${isCasting ? 'bg-blue-600 text-white' : 'bg-black/50 backdrop-blur-md text-white hover:bg-white/20'}`}
+                   title={isCasting ? `Transmitiendo en ${currentCastDevice}` : 'Enviar a TV (Chromecast)'}
+                 >
+                   <Cast size={18} />
+                   {isCasting && <span className="ml-1 text-xs">{currentCastDevice}</span>}
+                 </button>
+                 
+                 {/* Chromecast Device Menu */}
+                 {showCastMenu && chromecastDevices.length > 0 && (
+                   <div className="absolute top-full right-0 mt-2 bg-[#333] rounded-lg shadow-xl py-2 min-w-[200px] z-50">
+                     <div className="px-4 py-2 text-sm text-gray-400 border-b border-gray-600">
+                       Selecciona dispositivo
+                     </div>
+                     {chromecastDevices.map((device) => (
+                       <button
+                         key={device.name}
+                         onClick={() => startCasting(device.name)}
+                         className="w-full px-4 py-2 text-left text-sm hover:bg-[#444] transition-colors text-white"
+                       >
+                         {device.name}
+                       </button>
+                     ))}
+                   </div>
+                 )}
+                 
+                 {showCastMenu && chromecastDevices.length === 0 && (
+                   <div className="absolute top-full right-0 mt-2 bg-[#333] rounded-lg shadow-xl py-2 px-4 min-w-[200px] z-50">
+                     <p className="text-sm text-gray-400">Buscando dispositivos...</p>
+                   </div>
+                 )}
+               </div>
 
-              {/* Quality Selector */}
-              {qualityLevels.length > 0 && (
-                <div className="relative">
-                  <button 
-                    onClick={() => setShowQualityMenu(!showQualityMenu)}
-                    className="bg-black/50 backdrop-blur-md p-2 rounded-lg text-white hover:bg-white/20 transition-colors"
-                    title="Calidad del video"
-                  >
-                    <Settings size={18} />
-                    <span className="ml-1 text-xs">{currentQuality === -1 ? 'Auto' : `${qualityLevels[currentQuality]?.height}p`}</span>
-                  </button>
-                  
-                  {showQualityMenu && (
-                    <div className="absolute top-full right-0 mt-2 bg-[#333] rounded-lg shadow-xl py-2 min-w-[120px] z-50">
-                      <button
-                        onClick={() => handleQualityChange(-1)}
-                        className={`w-full px-4 py-2 text-left text-sm hover:bg-[#444] transition-colors ${currentQuality === -1 ? 'text-blue-400' : 'text-white'}`}
-                      >
-                        Auto
-                      </button>
-                      {qualityLevels.map((q) => (
-                        <button
-                          key={q.level}
-                          onClick={() => handleQualityChange(q.level)}
-                          className={`w-full px-4 py-2 text-left text-sm hover:bg-[#444] transition-colors ${currentQuality === q.level ? 'text-blue-400' : 'text-white'}`}
-                        >
-                          {q.height}p
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Picture-in-Picture */}
+               {/* Picture-in-Picture */}
               <button 
                 onClick={togglePiP}
                 className={`p-2 rounded-lg transition-colors ${isPiPActive ? 'bg-blue-600 text-white' : 'bg-black/50 backdrop-blur-md text-white hover:bg-white/20'}`}

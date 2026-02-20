@@ -15,6 +15,20 @@ from telethon import TelegramClient
 
 SESSION_FILE = "telegram_session"
 
+# Determine writable base directory.
+# In production (Electron packaged app), ACELINK_USER_DATA is set to app.getPath('userData').
+# In dev, fall back to the project root (current working directory).
+_user_data = os.environ.get("ACELINK_USER_DATA", "")
+if _user_data:
+    os.makedirs(_user_data, exist_ok=True)
+    SESSION_FILE = os.path.join(_user_data, "telegram_session")
+    _CONFIG_PATH = os.path.join(_user_data, "config.json")
+else:
+    _CONFIG_PATH = "config.json"
+
+# Fallback config path (points to Resources/config.json in packaged app)
+_CONFIG_FALLBACK = os.environ.get("ACELINK_CONFIG_FALLBACK", "")
+
 
 def debug(msg):
     print(f"[DEBUG] {msg}")
@@ -34,12 +48,15 @@ async def main():
 
         # Try to load config from file
         config = {}
-        if os.path.exists("config.json"):
-            try:
-                with open("config.json", "r") as f:
-                    config = json.load(f)
-            except:
-                pass
+        # Try primary path (userData), then fallback (Resources/config.json in packaged app)
+        for cfg_path in [_CONFIG_PATH, _CONFIG_FALLBACK]:
+            if cfg_path and os.path.exists(cfg_path):
+                try:
+                    with open(cfg_path, "r") as f:
+                        config = json.load(f)
+                    break
+                except:
+                    pass
 
         # Use config file or command line arguments
         api_id = command_obj.get("apiId") or config.get("api_id")
@@ -60,20 +77,78 @@ async def main():
         client = TelegramClient(SESSION_FILE, api_id, api_hash)
         await client.connect()
 
+        async def do_send_code():
+            sent = await client.send_code_request(phone)
+            code_type = type(sent.type).__name__
+            debug(f"Code sent via: {code_type}")
+            return sent.phone_code_hash, code_type
+
         if command == "login":
             if not await client.is_user_authorized():
-                sent_code = await client.send_code_request(phone)
+                phone_code_hash, code_type = await do_send_code()
                 print(
                     json.dumps(
                         {
                             "status": "needs_code",
                             "phone": phone,
-                            "phone_code_hash": sent_code.phone_code_hash,
+                            "phone_code_hash": phone_code_hash,
+                            "code_type": code_type,
                         }
                     )
                 )
             else:
                 print(json.dumps({"status": "authorized"}))
+
+        elif command == "request_sms":
+            # Try ResendCodeRequest first; if exhausted, cancel and start fresh.
+            from telethon.tl.functions.auth import ResendCodeRequest, CancelCodeRequest
+
+            phone_code_hash = command_obj.get("phoneCodeHash")
+            try:
+                result = await client(
+                    ResendCodeRequest(
+                        phone_number=phone, phone_code_hash=phone_code_hash
+                    )
+                )
+                code_type = type(result.type).__name__
+                debug(f"Resend code type: {code_type}")
+                print(
+                    json.dumps(
+                        {
+                            "status": "needs_code",
+                            "phone": phone,
+                            "phone_code_hash": result.phone_code_hash,
+                            "code_type": code_type,
+                        }
+                    )
+                )
+            except Exception as e:
+                debug(
+                    f"ResendCodeRequest failed ({e}), cancelling and retrying fresh..."
+                )
+                try:
+                    await client(
+                        CancelCodeRequest(
+                            phone_number=phone, phone_code_hash=phone_code_hash
+                        )
+                    )
+                except Exception as ce:
+                    debug(f"CancelCodeRequest also failed: {ce}")
+                # Start a completely new code request (fresh session)
+                try:
+                    phone_code_hash, code_type = await do_send_code()
+                    print(
+                        json.dumps(
+                            {
+                                "status": "needs_code",
+                                "phone": phone,
+                                "phone_code_hash": phone_code_hash,
+                                "code_type": code_type,
+                            }
+                        )
+                    )
+                except Exception as e2:
+                    print(json.dumps({"status": "error", "message": str(e2)}))
 
         elif command == "submit_code":
             code = command_obj.get("code")

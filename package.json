@@ -7,10 +7,47 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "package": "tsc -b && vite build && electron-builder --mac --dir",
     "lint": "eslint .",
     "preview": "vite preview"
   },
+  "build": {
+    "appId": "com.acelink.visual",
+    "productName": "AceLink Visual",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "python/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "python",
+        "to": "python"
+      },
+      {
+        "from": "config.json",
+        "to": "config.json"
+      }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": ["arm64", "x64"]
+        }
+      ],
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    }
+  },
   "dependencies": {
+    "chromecasts": "^1.10.2",
     "flv.js": "^1.6.2",
     "hls.js": "^1.6.15",
     "lucide-react": "^0.563.0",
@@ -22,7 +59,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@tailwindcss/postcss": "^4.1.18",
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.10.13",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",

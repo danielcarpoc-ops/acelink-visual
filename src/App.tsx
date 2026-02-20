@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, Play, Tv, Sun, Moon, Settings } from 'lucide-react';
+import { Play, Tv, Sun, Moon, Settings } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import TelegramTab from './components/TelegramTab';
 
@@ -37,32 +37,35 @@ function App() {
       fontSize === 'small' ? '14px' : fontSize === 'large' ? '18px' : '16px';
   }, [fontSize]);
 
+  // Listen for play requests from other tabs
+  const handlePlayStream = (e: CustomEvent<string>) => {
+    setPendingStream(e.detail);
+    setActiveTab('dashboard');
+  };
+
+  // Listen for going back to channels
+  const handleGoToChannels = () => {
+    setActiveTab('telegram');
+  };
+
   useEffect(() => {
-    // Listen for play requests from other tabs
-    const handlePlayStream = (e: any) => {
-        setPendingStream(e.detail);
-        setActiveTab('dashboard');
-    };
-    
-    // Listen for going back to channels
-    const handleGoToChannels = () => {
-        setActiveTab('telegram');
-    };
-    
-    window.addEventListener('play-stream', handlePlayStream);
+    window.addEventListener('play-stream', handlePlayStream as EventListener);
     window.addEventListener('go-to-channels', handleGoToChannels);
     return () => {
-      window.removeEventListener('play-stream', handlePlayStream);
+      window.removeEventListener('play-stream', handlePlayStream as EventListener);
       window.removeEventListener('go-to-channels', handleGoToChannels);
     };
   }, []);
 
   // Reset pending stream when switching to dashboard tab manually
   useEffect(() => {
-    if (activeTab === 'dashboard') {
-      setPendingStream(null);
+    if (activeTab === 'dashboard' && pendingStream !== null) {
+      // Use RAF to avoid synchronous setState during render
+      requestAnimationFrame(() => {
+        setPendingStream(null);
+      });
     }
-  }, [activeTab]);
+  }, [activeTab, pendingStream]);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -76,8 +79,13 @@ function App() {
   }, []);
 
   // Telegram State (moved up to persist across tab switches)
+  interface Channel {
+    id: number;
+    name: string;
+  }
+  
   const [tgPhone, setTgPhone] = useState(localStorage.getItem('tg_phone') || '');
-  const [tgChannels, setTgChannels] = useState<any[]>([]);
+  const [tgChannels, setTgChannels] = useState<Channel[]>([]);
   const [tgStep, setTgStep] = useState<'config' | 'code' | 'authorized'>('config');
 
   // Persist phone
@@ -140,7 +148,7 @@ function App() {
         });
         return match ? { favoriteName: favName, channel: match } : null;
       })
-      .filter((item): item is { favoriteName: string; channel: any } => item !== null)
+      .filter((item): item is { favoriteName: string; channel: Channel } => item !== null)
       .sort((a, b) => a.favoriteName.localeCompare(b.favoriteName, 'es'));
   };
 
@@ -148,10 +156,6 @@ function App() {
     <div className={`flex h-screen ${isDarkMode ? 'bg-[#1a1a1a] text-white' : 'bg-gray-50 text-gray-900'}`}>
       {/* Sidebar */}
       <div className={`w-20 flex flex-col items-center py-6 border-r pt-12 drag ${isDarkMode ? 'bg-[#242424] border-[#333]' : 'bg-white border-gray-200'}`}>
-        <div className="mb-8 p-2 bg-blue-600 rounded-lg no-drag">
-          <Activity size={24} color="white" />
-        </div>
-        
         <nav className="flex flex-col gap-4 w-full items-center no-drag">
           <button 
             onClick={() => setActiveTab('telegram')}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List, Loader2 } from 'lucide-react';
 
 // Helper function to clean channel names
@@ -12,17 +12,31 @@ const cleanChannelName = (name: string): string => {
     .trim();
 };
 
+interface Channel {
+  id: number;
+  name: string;
+  type?: 'channel' | 'event';
+}
+
+interface TelegramResponse {
+  status: string;
+  message?: string;
+  phone_code_hash?: string;
+  code_type?: string;
+  data?: Channel[];
+}
+
 interface TelegramTabProps {
   phone: string;
   setPhone: (p: string) => void;
   step: 'config' | 'code' | 'authorized';
   setStep: (s: 'config' | 'code' | 'authorized') => void;
-  channels: any[];
-  setChannels: (c: any[]) => void;
+  channels: Channel[];
+  setChannels: (c: Channel[]) => void;
   addToFavorites: (name: string) => void;
   removeFromFavorites: (name: string) => void;
   isFavorite: (name: string) => boolean;
-  getFavoriteMatches: () => { favoriteName: string; channel: any }[];
+  getFavoriteMatches: () => { favoriteName: string; channel: Channel }[];
   isDarkMode: boolean;
 }
 
@@ -44,6 +58,7 @@ const TelegramTab = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [phoneCodeHash, setPhoneCodeHash] = useState('');
+  const [codeType, setCodeType] = useState('');
   const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>('event');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -69,10 +84,11 @@ const TelegramTab = ({
       const res = await window.electronAPI.telegramAction(payload);
       setIsLoading(false);
       return res;
-    } catch (e: any) {
+    } catch (e) {
       setIsLoading(false);
-      setStatusMsg('Error: ' + e.message);
-      return { status: 'error', message: e.message };
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      setStatusMsg('Error: ' + errorMessage);
+      return { status: 'error', message: errorMessage };
     }
   };
 
@@ -81,11 +97,16 @@ const TelegramTab = ({
       setStatusMsg('Por favor, introduce tu número de teléfono');
       return;
     }
-    const res = await sendCommand('login');
+    const res = (await sendCommand('login')) as TelegramResponse;
     if (res.status === 'needs_code') {
       setStep('code');
-      setPhoneCodeHash(res.phone_code_hash);
-      setStatusMsg('Código enviado a tu app de Telegram');
+      setPhoneCodeHash(res.phone_code_hash || '');
+      setCodeType(res.code_type || '');
+      const via = res.code_type?.includes('Sms') ? 'SMS' :
+                  res.code_type?.includes('App') ? 'la app de Telegram' :
+                  res.code_type?.includes('Call') ? 'llamada de voz' :
+                  'Telegram';
+      setStatusMsg(`Código enviado por ${via}`);
     } else if (res.status === 'authorized') {
       setStep('authorized');
       fetchChannels();
@@ -95,7 +116,7 @@ const TelegramTab = ({
   };
 
   const submitCode = async () => {
-    const res = await sendCommand('submit_code', { code, phoneCodeHash });
+    const res = (await sendCommand('submit_code', { code, phoneCodeHash })) as TelegramResponse;
     if (res.status === 'authorized') {
       setStep('authorized');
       fetchChannels();
@@ -104,10 +125,25 @@ const TelegramTab = ({
     }
   };
 
+  const requestSms = async () => {
+    const res = (await sendCommand('request_sms', { phoneCodeHash })) as TelegramResponse;
+    if (res.status === 'needs_code') {
+      setPhoneCodeHash(res.phone_code_hash || '');
+      setCodeType(res.code_type || '');
+      const via = res.code_type?.includes('Sms') ? 'SMS'
+                : res.code_type?.includes('App') ? 'la app de Telegram'
+                : res.code_type?.includes('Call') ? 'llamada de voz'
+                : 'Telegram';
+      setStatusMsg(`Código reenviado por ${via}`);
+    } else {
+      setStatusMsg(res.message || 'Error al solicitar SMS');
+    }
+  };
+
   const fetchChannels = async () => {
-    const res = await sendCommand('fetch_channels');
+    const res = (await sendCommand('fetch_channels')) as TelegramResponse;
     if (res.status === 'success') {
-      setChannels(res.data);
+      setChannels(res.data || []);
       setIsInitialLoading(false);
     } else {
       setStatusMsg(res.message || 'Error al obtener canales');
@@ -120,11 +156,17 @@ const TelegramTab = ({
   };
 
   // Auto-connect on mount if phone exists
+  const hasAutoConnected = useRef(false);
   useEffect(() => {
-    if (phone && step === 'config') {
-      handleLogin();
+    if (phone && step === 'config' && !hasAutoConnected.current) {
+      hasAutoConnected.current = true;
+      // Use setTimeout to avoid synchronous setState during render
+      setTimeout(() => {
+        handleLogin();
+      }, 0);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phone, step]);
 
   // Filter and sort channels
   const filteredChannels = channels
@@ -188,24 +230,41 @@ const TelegramTab = ({
     return (
       <div className={`max-w-md mx-auto p-6 ${isDarkMode ? 'bg-[#242424]' : 'bg-white'} rounded-2xl shadow-xl text-center`}>
         <h2 className={`text-xl font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Introduce el Código</h2>
-        <p className={`mb-6 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Hemos enviado un código a tu app de Telegram.</p>
+        <p className={`mb-6 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          {codeType?.includes('Sms')
+            ? 'Hemos enviado un código por SMS a tu teléfono.'
+            : codeType?.includes('App')
+            ? 'Hemos enviado un código a tu app de Telegram. Ábrela y busca el mensaje de "Telegram".'
+            : 'Hemos enviado un código de verificación.'}
+        </p>
         
         <input 
           type="text" 
           value={code}
           onChange={e => setCode(e.target.value)}
-          className={`w-full border rounded-lg px-4 py-3 text-center text-2xl tracking-widest mb-6 ${isDarkMode ? 'bg-[#1a1a1a] border-[#333] text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
+          className={`w-full border rounded-lg px-4 py-3 text-center text-2xl tracking-widest mb-4 ${isDarkMode ? 'bg-[#1a1a1a] border-[#333] text-white' : 'bg-gray-100 border-gray-300 text-gray-900'}`}
           placeholder="12345"
         />
 
         <button 
           onClick={submitCode}
           disabled={isLoading}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50 mb-3"
         >
           {isLoading ? 'Verificando...' : 'Enviar Código'}
         </button>
-        {statusMsg && <p className="text-red-400 text-sm mt-2">{statusMsg}</p>}
+
+        {!codeType?.includes('Sms') && (
+          <button
+            onClick={requestSms}
+            disabled={isLoading}
+            className={`w-full py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${isDarkMode ? 'bg-[#333] hover:bg-[#444] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+          >
+            {isLoading ? 'Enviando...' : 'No me llega — recibir por SMS'}
+          </button>
+        )}
+
+        {statusMsg && <p className={`text-sm mt-3 ${statusMsg.includes('Error') ? 'text-red-400' : 'text-green-400'}`}>{statusMsg}</p>}
       </div>
     );
   }
@@ -331,7 +390,7 @@ const TelegramTab = ({
                 
                 <div className="flex gap-2">
                   <button 
-                    onClick={() => playChannel(item.channel.id)}
+                    onClick={() => playChannel(String(item.channel.id))}
                     className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                   >
                     <Play size={16} /> Reproducir
@@ -379,7 +438,7 @@ const TelegramTab = ({
                   <p className={`text-xs mb-4 font-mono truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{ch.id}</p>
                   
                   <button 
-                    onClick={() => playChannel(ch.id)}
+                    onClick={() => playChannel(String(ch.id))}
                     className={`w-full py-2 rounded-lg flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                   >
                     <Play size={16} /> Reproducir Ahora
@@ -405,7 +464,7 @@ const TelegramTab = ({
                     <Star size={18} fill={isFavorite(ch.name) ? 'currentColor' : 'none'} />
                   </button>
                   <button 
-                    onClick={() => playChannel(ch.id)}
+                    onClick={() => playChannel(String(ch.id))}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors whitespace-nowrap"
                   >
                     <Play size={16} /> Reproducir
