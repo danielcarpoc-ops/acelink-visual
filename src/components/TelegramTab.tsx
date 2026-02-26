@@ -267,8 +267,10 @@ const TelegramTab = ({
     };
   }, []);
 
-  // Fetch channel logos on load
+  // Fetch channel logos when EPG data is loaded
   useEffect(() => {
+    if (epgData.length === 0) return;
+    
     const fetchLogos = async () => {
       try {
         const logos = await window.electronAPI.getChannelLogos();
@@ -282,7 +284,7 @@ const TelegramTab = ({
     };
     
     fetchLogos();
-  }, []);
+  }, [epgData.length]);
 
   // Filter and sort channels
   const filteredChannels = channels
