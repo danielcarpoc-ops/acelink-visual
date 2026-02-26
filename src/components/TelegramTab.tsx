@@ -97,7 +97,7 @@ const TelegramTab = ({
   const [codeType, setCodeType] = useState('');
   const [epgData, setEpgData] = useState<EPGProgram[]>([]);
   const [channelLogos, setChannelLogos] = useState<Record<string, string>>({});
-  const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>('event');
+  const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>('channel');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Layout state
@@ -205,8 +205,15 @@ const TelegramTab = ({
         }
         const res = (await sendCommand('login')) as TelegramResponse;
         if (res.status === 'authorized') {
+          setIsInitialLoading(true);
+          const channelsRes = (await sendCommand('fetch_channels')) as TelegramResponse;
+          if (channelsRes.status === 'success') {
+            setChannels(channelsRes.data || []);
+          } else {
+            setStatusMsg(channelsRes.message || 'Error al obtener canales');
+          }
+          setIsInitialLoading(false);
           setStep('authorized');
-          fetchChannels();
         } else if (res.status === 'needs_code') {
           setStep('code');
           if (res.phone_code_hash) setPhoneCodeHash(res.phone_code_hash);
@@ -320,11 +327,9 @@ const TelegramTab = ({
 
   if (step === 'loading') {
     return (
-      <div className={`flex items-center justify-center h-64 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-        <div className="text-center">
-          <Loader2 size={48} className="animate-spin mx-auto mb-4" />
-          <p>Verificando sesión...</p>
-        </div>
+      <div className="flex flex-col items-center justify-center h-64">
+        <Loader2 size={48} className={`animate-spin ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+        <p className={`mt-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Cargando canales...</p>
       </div>
     );
   }
