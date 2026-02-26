@@ -101,16 +101,40 @@ function App() {
   const [tgPhone, setTgPhone] = useState(localStorage.getItem('tg_phone') || '');
   const [tgChannels, setTgChannels] = useState<Channel[]>([]);
   const [tgStep, setTgStep] = useState<'loading' | 'config' | 'code' | 'authorized'>('loading');
-  const [tgLogos, setTgLogos] = useState<Record<string, string>>({});
+
+  const LOGOS_CACHE_KEY = 'channel_logos_cache';
+  const LOGOS_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+  const loadCachedLogos = (): Record<string, string> | null => {
+    try {
+      const raw = localStorage.getItem(LOGOS_CACHE_KEY);
+      if (!raw) return null;
+      const { ts, data } = JSON.parse(raw);
+      if (Date.now() - ts < LOGOS_CACHE_TTL) return data;
+    } catch { /* ignore */ }
+    return null;
+  };
+
+  const [tgLogos, setTgLogos] = useState<Record<string, string>>(loadCachedLogos() || {});
   const logosLoaded = useRef(false);
 
   // Fetch channel logos once when step becomes authorized
   useEffect(() => {
     if (tgStep !== 'authorized' || logosLoaded.current) return;
     logosLoaded.current = true;
+
+    // If cache is valid, skip download entirely
+    const cached = loadCachedLogos();
+    if (cached && Object.keys(cached).length > 0) {
+      setTgLogos(cached);
+      return;
+    }
+
+    // Download from backend (EPG-parsed logos)
     window.electronAPI.getChannelLogos().then(logos => {
-      if (logos && typeof logos === 'object') {
+      if (logos && typeof logos === 'object' && Object.keys(logos).length > 0) {
         setTgLogos(logos);
+        localStorage.setItem(LOGOS_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: logos }));
       }
     }).catch(err => console.error('Failed to fetch channel logos:', err));
   }, [tgStep]);

@@ -557,7 +557,6 @@ const TelegramTab = ({
               const displayName = getDisplayName(cleanChannelName(item.channel.name));
               const logoUrl = findChannelLogo(displayName, channelLogos);
               const initial = displayName.charAt(0).toUpperCase();
-              const multiLink = groupChannels.length > 1;
               return (
               <div key={idx} className={`p-4 rounded-xl border transition-all ${isDarkMode ? 'bg-[#242424] border-[#333] hover:border-yellow-500/50' : 'bg-white border-gray-200 hover:border-yellow-400'}`}>
                 <div className="flex justify-between items-start mb-2">
@@ -587,7 +586,7 @@ const TelegramTab = ({
                         onClick={() => playChannel(String(ch.id))}
                         className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                       >
-                        <Play size={16} /> {multiLink ? (quality || `Enlace ${i + 1}`) : 'Reproducir'}
+                        <Play size={16} /> {quality || `Enlace ${i + 1}`}
                       </button>
                     );
                   })}
@@ -614,7 +613,6 @@ const TelegramTab = ({
           {groupedChannels.map((group) => {
             const logoUrl = findChannelLogo(group.displayName, channelLogos);
             const initial = group.displayName.charAt(0).toUpperCase();
-            const multiLink = group.channels.length > 1;
             return (
             <div key={group.key} className={`rounded-xl border transition-all ${layout === 'list' ? 'p-3 flex items-center gap-4' : 'p-4'} ${isDarkMode ? 'bg-[#242424] border-[#333] hover:border-blue-500/50' : 'bg-white border-gray-200 hover:border-blue-400'}`}>
               {layout === 'grid' ? (
@@ -662,7 +660,7 @@ const TelegramTab = ({
                           className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 text-sm transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                         >
                           <Play size={14} />
-                          {multiLink ? (quality || `Enlace ${i + 1}`) : 'Reproducir'}
+                          {quality || `Enlace ${i + 1}`}
                         </button>
                       );
                     })}
@@ -708,7 +706,7 @@ const TelegramTab = ({
                           className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 text-sm transition-colors whitespace-nowrap"
                         >
                           <Play size={14} />
-                          {multiLink ? (quality || `Enlace ${i + 1}`) : 'Reproducir'}
+                          {quality || `Enlace ${i + 1}`}
                         </button>
                       );
                     })}
