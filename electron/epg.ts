@@ -11,6 +11,7 @@ interface Program {
 interface ChannelInfo {
   names: string[];
   programs: Program[];
+  logo?: string;
 }
 
 let epgData: Map<string, ChannelInfo> = new Map();
@@ -40,6 +41,15 @@ function parseDateStr(str: string): number {
   return date;
 }
 
+function normalizeForMatch(name: string): string {
+  if (!name) return '';
+  let s = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  s = s.replace(/^(movistar|m\+|m\.|m\s+)/, '');
+  s = s.replace(/\b(hd|fhd|uhd|4k|1080p|1080|720p|720)\b/g, '');
+  s = s.replace(/[^\w]/g, '');
+  return s;
+}
+
 export async function fetchEPG() {
   if (isFetching) return;
   const now = Date.now();
@@ -67,6 +77,7 @@ export async function fetchEPG() {
     // Parse Channels
     const channelRegex = /<channel id="([^"]+)">(.*?)<\/channel>/gs;
     const displayNameRegex = /<display-name[^>]*>(.*?)<\/display-name>/g;
+    const iconRegex = /<icon src="([^"]+)"\s*\/>/;
     
     let match;
     while ((match = channelRegex.exec(xml)) !== null) {
@@ -77,7 +88,9 @@ export async function fetchEPG() {
       while ((nameMatch = displayNameRegex.exec(inner)) !== null) {
         names.push(nameMatch[1].trim());
       }
-      newEpgData.set(id, { names, programs: [] });
+      const iconMatch = iconRegex.exec(inner);
+      const logo = iconMatch ? iconMatch[1] : undefined;
+      newEpgData.set(id, { names, programs: [], logo });
     }
 
     // Parse Programs
@@ -132,4 +145,19 @@ export function getCurrentPrograms() {
     }
   }
   return current;
+}
+
+export function getChannelLogos(): Record<string, string> {
+  const logos: Record<string, string> = {};
+  for (const [id, info] of epgData.entries()) {
+    if (info.logo) {
+      for (const name of info.names) {
+        const normName = normalizeForMatch(name);
+        if (normName) {
+          logos[normName] = info.logo;
+        }
+      }
+    }
+  }
+  return logos;
 }

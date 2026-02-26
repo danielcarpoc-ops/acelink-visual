@@ -33,10 +33,17 @@ const findEpgMatch = (channelName: string, epgList: EPGProgram[]): EPGProgram | 
   return null;
 };
 
+const findChannelLogo = (channelName: string, logos: Record<string, string>): string | null => {
+  const normCh = normalizeForEpgMatch(channelName);
+  if (!normCh) return null;
+  return logos[normCh] || null;
+};
+
 interface Channel {
   id: number;
   name: string;
   type?: 'channel' | 'event';
+  photo?: string;
 }
 
 interface EPGProgram {
@@ -89,6 +96,7 @@ const TelegramTab = ({
   const [phoneCodeHash, setPhoneCodeHash] = useState('');
   const [codeType, setCodeType] = useState('');
   const [epgData, setEpgData] = useState<EPGProgram[]>([]);
+  const [channelLogos, setChannelLogos] = useState<Record<string, string>>({});
   const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>('event');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -226,6 +234,23 @@ const TelegramTab = ({
       clearInterval(interval);
       clearTimeout(timeoutId);
     };
+  }, []);
+
+  // Fetch channel logos on load
+  useEffect(() => {
+    const fetchLogos = async () => {
+      try {
+        const logos = await window.electronAPI.getChannelLogos();
+        console.log("Channel logos received:", Object.keys(logos).length);
+        if (logos && typeof logos === 'object') {
+          setChannelLogos(logos);
+        }
+      } catch (err) {
+        console.error('Failed to fetch channel logos:', err);
+      }
+    };
+    
+    fetchLogos();
   }, []);
 
   // Filter and sort channels
@@ -496,12 +521,24 @@ const TelegramTab = ({
                {searchQuery ? 'No se encontraron canales que coincidan con la búsqueda.' : 'No se encontró contenido en esta categoría.'}
              </div>
           )}
-          {filteredChannels.map((ch, idx) => (
+          {filteredChannels.map((ch, idx) => {
+            const logoUrl = findChannelLogo(ch.name, channelLogos);
+            const initial = cleanChannelName(ch.name).charAt(0).toUpperCase();
+            return (
             <div key={idx} className={`rounded-xl border transition-all group ${layout === 'list' ? 'p-3 flex items-center gap-4' : 'p-4'} ${isDarkMode ? 'bg-[#242424] border-[#333] hover:border-blue-500/50' : 'bg-white border-gray-200 hover:border-blue-400'}`}>
               {layout === 'grid' ? (
                 <>
                   <div className="flex justify-between items-start mb-1">
-                    <h3 className={`font-bold text-lg truncate flex-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(ch.name)}</h3>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="" className="w-10 h-10 rounded-lg object-contain bg-white/5 flex-shrink-0" />
+                      ) : (
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-600'}`}>
+                          {initial}
+                        </div>
+                      )}
+                      <h3 className={`font-bold text-lg truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(ch.name)}</h3>
+                    </div>
                     <button
                       onClick={() => {
                         if (isFavorite(ch.name)) {
@@ -531,10 +568,19 @@ const TelegramTab = ({
                 </>
               ) : (
                 <>
-                  <div className="flex-1 min-w-0">
-                    <h3 className={`font-bold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(ch.name)}</h3>
-                    <p className={`text-xs font-mono truncate mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{ch.id}</p>
-                    {renderEPG(ch.name)}
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {logoUrl ? (
+                      <img src={logoUrl} alt="" className="w-10 h-10 rounded-lg object-contain bg-white/5 flex-shrink-0" />
+                    ) : (
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-600'}`}>
+                        {initial}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-bold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(ch.name)}</h3>
+                      <p className={`text-xs font-mono truncate mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{ch.id}</p>
+                      {renderEPG(ch.name)}
+                    </div>
                   </div>
                   <button
                     onClick={() => {
@@ -558,7 +604,7 @@ const TelegramTab = ({
                 </>
               )}
             </div>
-          ))}
+          )})}
         </div>
       )}
     </div>

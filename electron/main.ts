@@ -7,7 +7,7 @@ import url from 'url';
 import util from 'util';
 import { createRequire } from 'module';
 import fs from 'fs';
-import { fetchEPG, getCurrentPrograms } from './epg';
+import { fetchEPG, getCurrentPrograms, getChannelLogos } from './epg';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +23,11 @@ const EXTRA_PATHS = [
   '/usr/sbin',
   '/sbin',
 ];
-process.env.PATH = [...new Set([...(process.env.PATH?.split(':') ?? []), ...EXTRA_PATHS])].join(':');
+if (process.platform === 'win32') {
+  // Optional paths for Windows could go here if needed. Usually, standard env vars are enough.
+} else {
+  process.env.PATH = [...new Set([...(process.env.PATH?.split(':') ?? []), ...EXTRA_PATHS])].join(':');
+}
 
 const execAsync = util.promisify(exec);
 
@@ -210,7 +214,8 @@ const runPythonScript = (command: Record<string, unknown>) => {
       ? path.join(process.resourcesPath, 'config.json')
       : path.join(__dirname, '../config.json');
 
-    const python = spawn('python3', [scriptPath], {
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    const python = spawn(pythonCmd, [scriptPath], {
       env: {
         ...process.env,
         ACELINK_USER_DATA: userDataPath,
@@ -269,7 +274,8 @@ const createWindow = () => {
       nodeIntegration: false,
       contextIsolation: true,
     },
-    titleBarStyle: 'hiddenInset', // Mac-like style
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden', // Mac-like style vs standard hidden
+
     backgroundColor: '#1a1a1a',
   });
 
@@ -283,6 +289,8 @@ const createWindow = () => {
 
 // Docker Management
 const waitForDocker = async (maxAttempts = 30): Promise<boolean> => {
+  if (process.platform === 'win32') return true;
+
   console.log('Verifying if Docker is running...');
   for (let i = 0; i < maxAttempts; i++) {
     try {
@@ -302,7 +310,39 @@ const waitForDocker = async (maxAttempts = 30): Promise<boolean> => {
   return false;
 };
 
+const checkWindowsEngineStatus = async (): Promise<boolean> => {
+  try {
+    const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq ace_engine.exe" /NH');
+    return stdout.includes('ace_engine.exe');
+  } catch (err) {
+    return false;
+  }
+};
+
 const startAceEngine = async () => {
+  if (process.platform === 'win32') {
+    const isRunning = await checkWindowsEngineStatus();
+    if (isRunning) {
+      console.log('Ace Engine is already running natively.');
+      return;
+    }
+
+    const appData = process.env.APPDATA;
+    const enginePath = path.join(appData || '', 'ACEStream', 'engine', 'ace_engine.exe');
+
+    if (fs.existsSync(enginePath)) {
+      console.log(`Starting Ace Stream Engine natively at ${enginePath}...`);
+      engineProcess = spawn(enginePath, [], {
+        detached: true,
+        stdio: 'ignore'
+      });
+      engineProcess.unref(); // Allow the parent to exit independently of the child
+    } else {
+      console.error('Ace Stream Engine not found at', enginePath);
+    }
+    return;
+  }
+
   try {
     const isDockerRunning = await waitForDocker();
     if (!isDockerRunning) {
@@ -360,14 +400,25 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Stop container on exit
-  exec('docker stop acelink-engine', () => {
-    if (process.platform !== 'darwin') app.quit();
-  });
+  if (process.platform === 'win32') {
+    // Stop native engine on exit
+    exec('taskkill /F /IM ace_engine.exe', () => {
+      app.quit();
+    });
+  } else {
+    // Stop container on exit
+    exec('docker stop acelink-engine', () => {
+      if (process.platform !== 'darwin') app.quit();
+    });
+  }
 });
 
 app.on('before-quit', async () => {
-   await execAsync('docker stop acelink-engine').catch(() => {});
+  if (process.platform === 'win32') {
+     await execAsync('taskkill /F /IM ace_engine.exe').catch(() => {});
+  } else {
+     await execAsync('docker stop acelink-engine').catch(() => {});
+  }
 });
 
 // IPC Handlers
@@ -377,6 +428,11 @@ ipcMain.handle('start-engine', async () => {
 });
 
 ipcMain.handle('check-docker-status', async () => {
+  if (process.platform === 'win32') {
+    const isRunning = await checkWindowsEngineStatus();
+    return isRunning ? 'running' : 'stopped';
+  }
+
   try {
     await execAsync('docker ps');
     // Check if our container is running
@@ -417,6 +473,10 @@ ipcMain.handle('get-current-epg', () => {
   return getCurrentPrograms();
 });
 
+ipcMain.handle('get-channel-logos', () => {
+  return getChannelLogos();
+});
+
 ipcMain.handle('write-config', async (event, configData) => {
   try {
     const userDataPath = app.getPath('userData');
@@ -441,8 +501,28 @@ ipcMain.handle('get-proxy-url', async (event, id) => {
 });
 
 ipcMain.handle('open-vlc', async (event, url) => {
-    // Open VLC with the stream URL
+  if (process.platform === 'win32') {
+    // Attempt to start VLC from common locations on Windows
+    const vlcPaths = [
+      'C:\\Program Files\\VideoLAN\\VLC\\vlc.exe',
+      'C:\\Program Files (x86)\\VideoLAN\\VLC\\vlc.exe'
+    ];
+    let vlcFound = false;
+    for (const vlcPath of vlcPaths) {
+      if (fs.existsSync(vlcPath)) {
+        exec(`"${vlcPath}" "${url}"`);
+        vlcFound = true;
+        break;
+      }
+    }
+    if (!vlcFound) {
+      // Fallback: use start to let Windows decide
+      exec(`start "" "${url}"`);
+    }
+  } else {
+    // Open VLC with the stream URL (macOS)
     exec(`open -a VLC "${url}"`);
+  }
 });
 
 ipcMain.handle('telegram-action', async (event, command) => {
@@ -490,6 +570,43 @@ const initChromecast = () => {
     console.error('[Chromecast] Failed to initialize:', error);
   }
 };
+
+ipcMain.handle('chromecast-scan', () => {
+  if (chromecasts) {
+    console.log('[Chromecast] Rescanning network...');
+    castDevices.length = 0; // Clear the array safely
+    
+    // Re-initialize to clear cache of old devices
+    try {
+      const require = createRequire(import.meta.url);
+      const chromecastsFactory = require('chromecasts');
+      
+      // Attempt to clean up old scanner if it has a destroy/close method
+      if (typeof (chromecasts as any).destroy === 'function') (chromecasts as any).destroy();
+      
+      chromecasts = chromecastsFactory() as ChromecastsModule;
+      chromecasts.on('update', (player: ChromecastPlayer) => {
+        console.log('[Chromecast] Found device (rescanning):', player.name);
+        const existingIndex = castDevices.findIndex(d => d.name === player.name);
+        if (existingIndex >= 0) {
+          castDevices[existingIndex] = player;
+        } else {
+          castDevices.push(player);
+        }
+        if (mainWindow) {
+          mainWindow.webContents.send('chromecast-devices-updated', castDevices.map(d => ({ name: d.name, host: d.host })));
+        }
+      });
+      // Send empty list to reset the UI immediately
+      if (mainWindow) {
+        mainWindow.webContents.send('chromecast-devices-updated', []);
+      }
+    } catch (e) {
+      console.error('[Chromecast] Rescan error:', e);
+    }
+  }
+  return [];
+});
 
 app.whenReady().then(() => {
   initChromecast();

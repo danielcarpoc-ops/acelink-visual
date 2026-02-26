@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readConfig: () => ipcRenderer.invoke('read-config'),
   writeConfig: (configData: any) => ipcRenderer.invoke('write-config', configData),
   getCurrentEpg: () => ipcRenderer.invoke('get-current-epg'),
+  getChannelLogos: () => ipcRenderer.invoke('get-channel-logos'),
   getStreamUrl: (id: string) => ipcRenderer.invoke('get-stream-url', id),
   getProxyUrl: (id: string) => ipcRenderer.invoke('get-proxy-url', id),
   openVlc: (url: string) => ipcRenderer.invoke('open-vlc', url),
@@ -18,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAlwaysOnTop: (value: boolean) => ipcRenderer.invoke('set-always-on-top', value),
   // Chromecast methods
   chromecastGetDevices: () => ipcRenderer.invoke('chromecast-get-devices'),
+  chromecastScan: () => ipcRenderer.invoke('chromecast-scan'),
   chromecastStart: (deviceName: string, streamUrl: string) => ipcRenderer.invoke('chromecast-start', deviceName, streamUrl),
   chromecastStop: () => ipcRenderer.invoke('chromecast-stop'),
   chromecastPause: () => ipcRenderer.invoke('chromecast-pause'),

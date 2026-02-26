@@ -12,6 +12,7 @@ interface Window {
     readConfig: () => Promise<{ api_id: string | number; api_hash: string }>;
     writeConfig: (configData: { api_id: string | number; api_hash: string }) => Promise<boolean>;
     getCurrentEpg: () => Promise<any[]>;
+    getChannelLogos: () => Promise<Record<string, string>>;
     getStreamUrl: (id: string) => Promise<string>;
     getProxyUrl: (id: string) => Promise<string>;
     openVlc: (url: string) => Promise<void>;
@@ -19,6 +20,7 @@ interface Window {
     setAlwaysOnTop?: (value: boolean) => Promise<boolean>;
     // Chromecast methods
     chromecastGetDevices: () => Promise<ChromecastDevice[]>;
+    chromecastScan: () => Promise<ChromecastDevice[]>;
     chromecastStart: (deviceName: string, streamUrl: string) => Promise<{ success: boolean; device: string }>;
     chromecastStop: () => Promise<{ success: boolean; error?: string }>;
     chromecastPause: () => Promise<{ success: boolean; error?: string }>;
