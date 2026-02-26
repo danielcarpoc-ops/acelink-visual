@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "package": "tsc -b && vite build && electron-builder --mac --dir",
+    "package:win": "tsc -b && vite build && electron-builder --win --x64 --dir",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -44,6 +45,14 @@
       "identity": null,
       "hardenedRuntime": false,
       "gatekeeperAssess": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
     }
   },
   "dependencies": {

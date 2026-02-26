@@ -47,6 +47,7 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
   const [isCasting, setIsCasting] = useState(false);
   const [currentCastDevice, setCurrentCastDevice] = useState<string>('');
   const [showCastMenu, setShowCastMenu] = useState(false);
+  const [isScanningCast, setIsScanningCast] = useState(false);
   
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -273,6 +274,22 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
   };
 
   // Chromecast functions
+  const handleScanCast = async () => {
+    setIsScanningCast(true);
+    try {
+      const devices = await window.electronAPI?.chromecastScan();
+      if (devices) {
+        setChromecastDevices(devices);
+      }
+    } catch (err) {
+      console.error('Scan error:', err);
+    }
+    // Set a timeout to clear the scanning state after 5 seconds
+    setTimeout(() => {
+      setIsScanningCast(false);
+    }, 5000);
+  };
+
   const toggleCast = async () => {
     if (isCasting) {
       try {
@@ -283,7 +300,13 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
         console.error('Cast stop error:', err);
       }
     } else {
-      setShowCastMenu(!showCastMenu);
+      const newMenuState = !showCastMenu;
+      setShowCastMenu(newMenuState);
+      
+      // If opening menu and no devices, auto-trigger scan
+      if (newMenuState && chromecastDevices.length === 0) {
+        handleScanCast();
+      }
     }
   };
 
@@ -519,12 +542,56 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
                          {device.name}
                        </button>
                      ))}
+                     {/* Botón de Test (Mock) en DEV */}
+                     {import.meta.env.DEV && (
+                       <button
+                         key="mock-device"
+                         onClick={() => {
+                            setIsCasting(true);
+                            setCurrentCastDevice("Mock TV (Dev)");
+                            setShowCastMenu(false);
+                            console.log("Mock casting started to", streamUrl);
+                         }}
+                         className="w-full px-4 py-2 text-left text-sm hover:bg-[#444] transition-colors text-green-400 font-medium border-t border-gray-600 mt-1"
+                       >
+                         📺 Mock TV (Simulador)
+                       </button>
+                     )}
                    </div>
                  )}
                  
                  {showCastMenu && chromecastDevices.length === 0 && (
-                   <div className="absolute top-full right-0 mt-2 bg-[#333] rounded-lg shadow-xl py-2 px-4 min-w-[200px] z-50">
-                     <p className="text-sm text-gray-400">Buscando dispositivos...</p>
+                   <div className="absolute top-full right-0 mt-2 bg-[#333] rounded-lg shadow-xl py-3 px-4 min-w-[220px] z-50">
+                     {isScanningCast ? (
+                       <div className="flex flex-col items-center gap-2">
+                         <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                         <p className="text-sm text-gray-400">Buscando en red local...</p>
+                       </div>
+                     ) : (
+                       <div className="flex flex-col items-center gap-3">
+                         <p className="text-sm text-gray-400 text-center">No se han encontrado dispositivos Chromecast.</p>
+                         <button 
+                           onClick={handleScanCast}
+                           className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 rounded-lg transition-colors"
+                         >
+                           Volver a escanear
+                         </button>
+                         {/* Botón de Test (Mock) en DEV para estado vacío */}
+                         {import.meta.env.DEV && (
+                           <button
+                             onClick={() => {
+                                setIsCasting(true);
+                                setCurrentCastDevice("Mock TV (Dev)");
+                                setShowCastMenu(false);
+                                console.log("Mock casting started to", streamUrl);
+                             }}
+                             className="w-full mt-2 border border-green-500 text-green-400 hover:bg-green-500 hover:text-white text-xs font-bold py-2 rounded-lg transition-colors"
+                           >
+                             📺 Usar Mock TV (Simulador)
+                           </button>
+                         )}
+                       </div>
+                     )}
                    </div>
                  )}
                </div>
