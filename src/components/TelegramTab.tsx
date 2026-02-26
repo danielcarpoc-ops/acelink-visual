@@ -65,8 +65,8 @@ interface TelegramResponse {
 interface TelegramTabProps {
   phone: string;
   setPhone: (p: string) => void;
-  step: 'config' | 'code' | 'authorized';
-  setStep: (s: 'config' | 'code' | 'authorized') => void;
+  step: 'loading' | 'config' | 'code' | 'authorized';
+  setStep: (s: 'loading' | 'config' | 'code' | 'authorized') => void;
   channels: Channel[];
   setChannels: (c: Channel[]) => void;
   addToFavorites: (name: string) => void;
@@ -193,12 +193,36 @@ const TelegramTab = ({
     window.dispatchEvent(event);
   };
 
-  // Auto-connect on mount if phone exists
+  // Auto-connect on mount - check session without showing phone input
   const hasAutoConnected = useRef(false);
+  useEffect(() => {
+    if (step === 'loading' && !hasAutoConnected.current) {
+      hasAutoConnected.current = true;
+      setTimeout(async () => {
+        if (!phone) {
+          setStep('config');
+          return;
+        }
+        const res = (await sendCommand('login')) as TelegramResponse;
+        if (res.status === 'authorized') {
+          setStep('authorized');
+          fetchChannels();
+        } else if (res.status === 'needs_code') {
+          setStep('code');
+          if (res.phone_code_hash) setPhoneCodeHash(res.phone_code_hash);
+          if (res.code_type) setCodeType(res.code_type);
+        } else {
+          setStep('config');
+        }
+      }, 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // Auto-login when phone exists and step is config (backward compatibility)
   useEffect(() => {
     if (phone && step === 'config' && !hasAutoConnected.current) {
       hasAutoConnected.current = true;
-      // Use setTimeout to avoid synchronous setState during render
       setTimeout(() => {
         handleLogin();
       }, 0);
@@ -293,6 +317,17 @@ const TelegramTab = ({
       </div>
     );
   };
+
+  if (step === 'loading') {
+    return (
+      <div className={`flex items-center justify-center h-64 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+        <div className="text-center">
+          <Loader2 size={48} className="animate-spin mx-auto mb-4" />
+          <p>Verificando sesión...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (step === 'config') {
     return (

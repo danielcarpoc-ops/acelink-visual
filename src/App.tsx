@@ -100,7 +100,7 @@ function App() {
   
   const [tgPhone, setTgPhone] = useState(localStorage.getItem('tg_phone') || '');
   const [tgChannels, setTgChannels] = useState<Channel[]>([]);
-  const [tgStep, setTgStep] = useState<'config' | 'code' | 'authorized'>('config');
+  const [tgStep, setTgStep] = useState<'loading' | 'config' | 'code' | 'authorized'>('loading');
 
   // Settings State for Telegram Config
   const [apiId, setApiId] = useState('');
