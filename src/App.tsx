@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Play, Tv, Sun, Moon, Settings, RefreshCw } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import TelegramTab from './components/TelegramTab';
@@ -101,6 +101,19 @@ function App() {
   const [tgPhone, setTgPhone] = useState(localStorage.getItem('tg_phone') || '');
   const [tgChannels, setTgChannels] = useState<Channel[]>([]);
   const [tgStep, setTgStep] = useState<'loading' | 'config' | 'code' | 'authorized'>('loading');
+  const [tgLogos, setTgLogos] = useState<Record<string, string>>({});
+  const logosLoaded = useRef(false);
+
+  // Fetch channel logos once when step becomes authorized
+  useEffect(() => {
+    if (tgStep !== 'authorized' || logosLoaded.current) return;
+    logosLoaded.current = true;
+    window.electronAPI.getChannelLogos().then(logos => {
+      if (logos && typeof logos === 'object') {
+        setTgLogos(logos);
+      }
+    }).catch(err => console.error('Failed to fetch channel logos:', err));
+  }, [tgStep]);
 
   // Settings State for Telegram Config
   const [apiId, setApiId] = useState('');
@@ -278,6 +291,7 @@ function App() {
               setStep={setTgStep}
               channels={tgChannels}
               setChannels={setTgChannels}
+              channelLogos={tgLogos}
               addToFavorites={addToFavorites}
               removeFromFavorites={removeFromFavorites}
               isFavorite={isFavorite}

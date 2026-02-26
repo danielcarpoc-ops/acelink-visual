@@ -69,6 +69,7 @@ interface TelegramTabProps {
   setStep: (s: 'loading' | 'config' | 'code' | 'authorized') => void;
   channels: Channel[];
   setChannels: (c: Channel[]) => void;
+  channelLogos: Record<string, string>;
   addToFavorites: (name: string) => void;
   removeFromFavorites: (name: string) => void;
   isFavorite: (name: string) => boolean;
@@ -83,6 +84,7 @@ const TelegramTab = ({
   setStep, 
   channels, 
   setChannels,
+  channelLogos,
   addToFavorites,
   removeFromFavorites,
   isFavorite,
@@ -96,7 +98,6 @@ const TelegramTab = ({
   const [phoneCodeHash, setPhoneCodeHash] = useState('');
   const [codeType, setCodeType] = useState('');
   const [epgData, setEpgData] = useState<EPGProgram[]>([]);
-  const [channelLogos, setChannelLogos] = useState<Record<string, string>>({});
   const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>('channel');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -266,24 +267,6 @@ const TelegramTab = ({
       clearTimeout(timeoutId);
     };
   }, []);
-
-  // Fetch channel logos once when authorized
-  const logosLoaded = useRef(false);
-  useEffect(() => {
-    if (step !== 'authorized' || logosLoaded.current) return;
-    logosLoaded.current = true;
-    
-    const fetchLogos = async () => {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      const logos = await window.electronAPI.getChannelLogos();
-      console.log("Channel logos received:", Object.keys(logos).length);
-      if (logos && typeof logos === 'object') {
-        setChannelLogos(logos);
-      }
-    };
-    
-    fetchLogos();
-  }, [step]);
 
   // Filter and sort channels
   const filteredChannels = channels
