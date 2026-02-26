@@ -39,6 +39,32 @@ const findChannelLogo = (channelName: string, logos: Record<string, string>): st
   return logos[normCh] || null;
 };
 
+const QUALITY_TAGS = ['UHD', 'FHD', '4K', '1080p', '1080', '720p', '720', 'HD'];
+
+const extractQuality = (name: string): string => {
+  const upper = name.toUpperCase();
+  for (const tag of QUALITY_TAGS) {
+    const regex = new RegExp(`\\b${tag}\\b`, 'i');
+    if (regex.test(upper)) return tag.toUpperCase();
+  }
+  return '';
+};
+
+const getDisplayName = (name: string): string => {
+  // Remove quality tags and clean up
+  let s = name;
+  for (const tag of QUALITY_TAGS) {
+    s = s.replace(new RegExp(`\\b${tag}\\b`, 'gi'), '');
+  }
+  return s.replace(/\s+/g, ' ').trim();
+};
+
+interface ChannelGroup {
+  key: string;
+  displayName: string;
+  channels: Channel[];
+}
+
 interface Channel {
   id: number;
   name: string;
@@ -289,6 +315,24 @@ const TelegramTab = ({
       return cleanChannelName(a.name).localeCompare(cleanChannelName(b.name), 'es');
     });
 
+  // Group channels by normalized name (ignoring quality tags)
+  const groupedChannels: ChannelGroup[] = [];
+  const groupMap = new Map<string, ChannelGroup>();
+  for (const ch of filteredChannels) {
+    const key = normalizeForEpgMatch(ch.name);
+    if (!groupMap.has(key)) {
+      const group: ChannelGroup = {
+        key,
+        displayName: getDisplayName(cleanChannelName(ch.name)),
+        channels: [ch],
+      };
+      groupMap.set(key, group);
+      groupedChannels.push(group);
+    } else {
+      groupMap.get(key)!.channels.push(ch);
+    }
+  }
+
   // Get favorite matches
   const favoriteMatches = getFavoriteMatches();
 
@@ -506,25 +550,47 @@ const TelegramTab = ({
               <p className={`text-sm mt-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Añade canales a favoritos desde las pestañas Canales o Eventos.</p>
             </div>
           ) : (
-            favoriteMatches.map((item, idx) => (
-              <div key={idx} className={`p-4 rounded-xl border transition-all group ${isDarkMode ? 'bg-[#242424] border-[#333] hover:border-yellow-500/50' : 'bg-white border-gray-200 hover:border-yellow-400'}`}>
-                <div className="flex justify-between items-start mb-1">
-                  <h3 className={`font-bold text-lg truncate flex-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(item.channel.name)}</h3>
-                  <Star className="text-yellow-500 shrink-0" size={18} fill="currentColor" />
+            favoriteMatches.map((item, idx) => {
+              // Find all channels in the same group as this favorite
+              const key = normalizeForEpgMatch(item.channel.name);
+              const groupChannels = channels.filter(ch => normalizeForEpgMatch(ch.name) === key);
+              const displayName = getDisplayName(cleanChannelName(item.channel.name));
+              const logoUrl = findChannelLogo(displayName, channelLogos);
+              const initial = displayName.charAt(0).toUpperCase();
+              const multiLink = groupChannels.length > 1;
+              return (
+              <div key={idx} className={`p-4 rounded-xl border transition-all ${isDarkMode ? 'bg-[#242424] border-[#333] hover:border-yellow-500/50' : 'bg-white border-gray-200 hover:border-yellow-400'}`}>
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {logoUrl ? (
+                      <img src={logoUrl} alt="" className="w-10 h-10 rounded-lg object-contain bg-white/5 flex-shrink-0" />
+                    ) : (
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 font-bold ${isDarkMode ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-600'}`}>
+                        {initial}
+                      </div>
+                    )}
+                    <h3 className={`font-bold text-lg truncate flex-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{displayName}</h3>
+                  </div>
+                  <Star className="text-yellow-500 shrink-0 ml-2" size={18} fill="currentColor" />
                 </div>
-                <p className={`text-xs mb-2 font-mono truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{item.channel.id}</p>
-                
-                <div className="mb-4 h-[24px]">
-                  {renderEPG(item.channel.name)}
+
+                <div className="mb-3 h-[24px]">
+                  {renderEPG(displayName)}
                 </div>
-                
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => playChannel(String(item.channel.id))}
-                    className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
-                  >
-                    <Play size={16} /> Reproducir
-                  </button>
+
+                <div className="flex gap-2 flex-wrap">
+                  {groupChannels.map((ch, i) => {
+                    const quality = extractQuality(ch.name);
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => playChannel(String(ch.id))}
+                        className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
+                      >
+                        <Play size={16} /> {multiLink ? (quality || `Enlace ${i + 1}`) : 'Reproducir'}
+                      </button>
+                    );
+                  })}
                   <button
                     onClick={() => removeFromFavorites(item.channel.name)}
                     className={`py-2 px-3 rounded-lg transition-colors ${isDarkMode ? 'bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white' : 'bg-red-100 hover:bg-red-600 text-red-600 hover:text-white'}`}
@@ -534,97 +600,119 @@ const TelegramTab = ({
                   </button>
                 </div>
               </div>
-            ))
+            )})
           )}
         </div>
       ) : (
         // Regular channels/events view
         <div className={layout === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "flex flex-col gap-2"}>
-          {filteredChannels.length === 0 && (
+          {groupedChannels.length === 0 && (
              <div className={layout === 'grid' ? `col-span-full text-center py-10 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}` : `text-center py-10 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                {searchQuery ? 'No se encontraron canales que coincidan con la búsqueda.' : 'No se encontró contenido en esta categoría.'}
              </div>
           )}
-          {filteredChannels.map((ch, idx) => {
-            const logoUrl = findChannelLogo(ch.name, channelLogos);
-            const initial = cleanChannelName(ch.name).charAt(0).toUpperCase();
+          {groupedChannels.map((group) => {
+            const logoUrl = findChannelLogo(group.displayName, channelLogos);
+            const initial = group.displayName.charAt(0).toUpperCase();
+            const multiLink = group.channels.length > 1;
             return (
-            <div key={idx} className={`rounded-xl border transition-all group ${layout === 'list' ? 'p-3 flex items-center gap-4' : 'p-4'} ${isDarkMode ? 'bg-[#242424] border-[#333] hover:border-blue-500/50' : 'bg-white border-gray-200 hover:border-blue-400'}`}>
+            <div key={group.key} className={`rounded-xl border transition-all ${layout === 'list' ? 'p-3 flex items-center gap-4' : 'p-4'} ${isDarkMode ? 'bg-[#242424] border-[#333] hover:border-blue-500/50' : 'bg-white border-gray-200 hover:border-blue-400'}`}>
               {layout === 'grid' ? (
                 <>
-                  <div className="flex justify-between items-start mb-1">
+                  {/* Header: icon + name + favorite */}
+                  <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       {logoUrl ? (
                         <img src={logoUrl} alt="" className="w-10 h-10 rounded-lg object-contain bg-white/5 flex-shrink-0" />
                       ) : (
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-600'}`}>
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 font-bold ${isDarkMode ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-600'}`}>
                           {initial}
                         </div>
                       )}
-                      <h3 className={`font-bold text-lg truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(ch.name)}</h3>
+                      <h3 className={`font-bold text-lg truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{group.displayName}</h3>
                     </div>
                     <button
                       onClick={() => {
-                        if (isFavorite(ch.name)) {
-                          removeFromFavorites(ch.name);
+                        if (isFavorite(group.displayName)) {
+                          removeFromFavorites(group.displayName);
                         } else {
-                          addToFavorites(ch.name);
+                          addToFavorites(group.displayName);
                         }
                       }}
-                      className={`transition-colors ${isFavorite(ch.name) ? 'text-yellow-500' : (isDarkMode ? 'text-gray-600 hover:text-yellow-500' : 'text-gray-400 hover:text-yellow-500')}`}
-                      title={isFavorite(ch.name) ? 'Eliminar de favoritos' : 'Añadir a favoritos'}
+                      className={`transition-colors ml-2 flex-shrink-0 ${isFavorite(group.displayName) ? 'text-yellow-500' : (isDarkMode ? 'text-gray-600 hover:text-yellow-500' : 'text-gray-400 hover:text-yellow-500')}`}
+                      title={isFavorite(group.displayName) ? 'Eliminar de favoritos' : 'Añadir a favoritos'}
                     >
-                      <Star size={18} fill={isFavorite(ch.name) ? 'currentColor' : 'none'} />
+                      <Star size={18} fill={isFavorite(group.displayName) ? 'currentColor' : 'none'} />
                     </button>
                   </div>
-                  <p className={`text-xs mb-2 font-mono truncate ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{ch.id}</p>
-                  
-                  <div className="mb-4 h-[24px]">
-                    {renderEPG(ch.name)}
+
+                  {/* EPG */}
+                  <div className="mb-3 h-[24px]">
+                    {renderEPG(group.displayName)}
                   </div>
-                  
-                  <button 
-                    onClick={() => playChannel(String(ch.id))}
-                    className={`w-full py-2 rounded-lg flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
-                  >
-                    <Play size={16} /> Reproducir Ahora
-                  </button>
+
+                  {/* Play buttons */}
+                  <div className="flex flex-wrap gap-2">
+                    {group.channels.map((ch, i) => {
+                      const quality = extractQuality(ch.name);
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => playChannel(String(ch.id))}
+                          className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 text-sm transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
+                        >
+                          <Play size={14} />
+                          {multiLink ? (quality || `Enlace ${i + 1}`) : 'Reproducir'}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </>
               ) : (
                 <>
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    {logoUrl ? (
-                      <img src={logoUrl} alt="" className="w-10 h-10 rounded-lg object-contain bg-white/5 flex-shrink-0" />
-                    ) : (
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-600'}`}>
-                        {initial}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h3 className={`font-bold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cleanChannelName(ch.name)}</h3>
-                      <p className={`text-xs font-mono truncate mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>{ch.id}</p>
-                      {renderEPG(ch.name)}
+                  {/* Icon */}
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="" className="w-10 h-10 rounded-lg object-contain bg-white/5 flex-shrink-0" />
+                  ) : (
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 font-bold ${isDarkMode ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-600'}`}>
+                      {initial}
                     </div>
+                  )}
+                  {/* Name + EPG */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className={`font-bold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{group.displayName}</h3>
+                    {renderEPG(group.displayName)}
                   </div>
+                  {/* Favorite */}
                   <button
                     onClick={() => {
-                      if (isFavorite(ch.name)) {
-                        removeFromFavorites(ch.name);
+                      if (isFavorite(group.displayName)) {
+                        removeFromFavorites(group.displayName);
                       } else {
-                        addToFavorites(ch.name);
+                        addToFavorites(group.displayName);
                       }
                     }}
-                    className={`transition-colors ${isFavorite(ch.name) ? 'text-yellow-500' : (isDarkMode ? 'text-gray-600 hover:text-yellow-500' : 'text-gray-400 hover:text-yellow-500')}`}
-                    title={isFavorite(ch.name) ? 'Eliminar de favoritos' : 'Añadir a favoritos'}
+                    className={`transition-colors flex-shrink-0 ${isFavorite(group.displayName) ? 'text-yellow-500' : (isDarkMode ? 'text-gray-600 hover:text-yellow-500' : 'text-gray-400 hover:text-yellow-500')}`}
+                    title={isFavorite(group.displayName) ? 'Eliminar de favoritos' : 'Añadir a favoritos'}
                   >
-                    <Star size={18} fill={isFavorite(ch.name) ? 'currentColor' : 'none'} />
+                    <Star size={18} fill={isFavorite(group.displayName) ? 'currentColor' : 'none'} />
                   </button>
-                  <button 
-                    onClick={() => playChannel(String(ch.id))}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors whitespace-nowrap"
-                  >
-                    <Play size={16} /> Reproducir
-                  </button>
+                  {/* Play buttons */}
+                  <div className="flex gap-2 flex-shrink-0">
+                    {group.channels.map((ch, i) => {
+                      const quality = extractQuality(ch.name);
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => playChannel(String(ch.id))}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 text-sm transition-colors whitespace-nowrap"
+                        >
+                          <Play size={14} />
+                          {multiLink ? (quality || `Enlace ${i + 1}`) : 'Reproducir'}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </>
               )}
             </div>
