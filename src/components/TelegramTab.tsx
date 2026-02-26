@@ -267,9 +267,11 @@ const TelegramTab = ({
     };
   }, []);
 
-  // Fetch channel logos on load
+  // Fetch channel logos once when authorized
+  const logosLoaded = useRef(false);
   useEffect(() => {
-    if (step !== 'authorized') return;
+    if (step !== 'authorized' || logosLoaded.current) return;
+    logosLoaded.current = true;
     
     const fetchLogos = async () => {
       await new Promise(resolve => setTimeout(resolve, 2000));
