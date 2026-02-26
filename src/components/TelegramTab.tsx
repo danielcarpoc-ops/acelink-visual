@@ -269,21 +269,19 @@ const TelegramTab = ({
 
   // Fetch channel logos on load
   useEffect(() => {
+    if (step !== 'authorized') return;
+    
     const fetchLogos = async () => {
-      try {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const logos = await window.electronAPI.getChannelLogos();
-        console.log("Channel logos received:", Object.keys(logos).length);
-        if (logos && typeof logos === 'object') {
-          setChannelLogos(logos);
-        }
-      } catch (err) {
-        console.error('Failed to fetch channel logos:', err);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const logos = await window.electronAPI.getChannelLogos();
+      console.log("Channel logos received:", Object.keys(logos).length);
+      if (logos && typeof logos === 'object') {
+        setChannelLogos(logos);
       }
     };
     
     fetchLogos();
-  }, []);
+  }, [step]);
 
   // Filter and sort channels
   const filteredChannels = channels
