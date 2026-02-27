@@ -532,33 +532,32 @@ const TelegramTab = ({
                     )}
                     <h3 className={`font-bold text-lg truncate flex-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{displayName}</h3>
                   </div>
-                  <Star className="text-yellow-500 shrink-0 ml-2" size={18} fill="currentColor" />
+                  <button
+                    onClick={() => removeFromFavorites(item.channel.name)}
+                    className="transition-colors ml-2 flex-shrink-0 text-yellow-500 hover:text-gray-400"
+                    title="Quitar de favoritos"
+                  >
+                    <Star size={18} fill="currentColor" />
+                  </button>
                 </div>
 
                 <div className="mb-3 h-[24px]">
                   {renderEPG(displayName)}
                 </div>
 
-                <div className="flex gap-2 flex-wrap">
+                <div className="grid grid-cols-3 gap-2">
                   {groupChannels.map((ch, i) => {
                     const quality = extractQuality(ch.name);
                     return (
                       <button
                         key={i}
                         onClick={() => playChannel(String(ch.id))}
-                        className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
+                        className={`w-full py-2 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                       >
                         <Play size={16} /> {quality || `Enlace ${i + 1}`}
                       </button>
                     );
                   })}
-                  <button
-                    onClick={() => removeFromFavorites(item.channel.name)}
-                    className={`py-2 px-3 rounded-lg transition-colors ${isDarkMode ? 'bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white' : 'bg-red-100 hover:bg-red-600 text-red-600 hover:text-white'}`}
-                    title="Eliminar de favoritos"
-                  >
-                    <Trash2 size={16} />
-                  </button>
                 </div>
               </div>
             )})
@@ -612,14 +611,14 @@ const TelegramTab = ({
                   </div>
 
                   {/* Play buttons */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     {group.channels.map((ch, i) => {
                       const quality = extractQuality(ch.name);
                       return (
                         <button
                           key={i}
                           onClick={() => playChannel(String(ch.id))}
-                          className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 text-sm transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
+                          className={`w-full py-2 rounded-lg flex items-center justify-center gap-1.5 text-sm transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                         >
                           <Play size={14} />
                           {quality || `Enlace ${i + 1}`}
@@ -665,7 +664,7 @@ const TelegramTab = ({
                         <button
                           key={i}
                           onClick={() => playChannel(String(ch.id))}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 text-sm transition-colors whitespace-nowrap"
+                          className={`w-16 py-2 rounded-lg flex items-center justify-center gap-1.5 text-sm transition-colors whitespace-nowrap ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                         >
                           <Play size={14} />
                           {quality || `Enlace ${i + 1}`}

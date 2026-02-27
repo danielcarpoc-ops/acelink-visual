@@ -57,14 +57,18 @@ export const extractQuality = (name: string): string => {
 
 /**
  * Clean a channel name for display:
- * keeps letters (including accented), numbers and spaces; collapses whitespace.
+ * keeps letters (including accented), numbers, spaces and '+'; collapses whitespace.
+ * Strips Markdown decorators and trailing punctuation (: .) but preserves '+'.
  */
 export const cleanChannelName = (name: string): string => {
   if (!name) return '';
   // Strip invisible/control characters first
   let s = name.replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\uFEFF\u202A-\u202E]/g, '');
-  return s
-    .replace(/[^\p{L}\p{N}\s]/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // Strip Markdown decorators
+  s = s.replace(/[_*`~|>]+/g, '');
+  // Strip trailing/leading punctuation except '+'
+  s = s.replace(/^\s*[:.\\-]+|[:.\\-]+\s*$/g, '');
+  // Keep letters, numbers, spaces and '+'; drop everything else
+  s = s.replace(/[^\p{L}\p{N}\s+]/gu, '');
+  return s.replace(/\s+/g, ' ').trim();
 };
