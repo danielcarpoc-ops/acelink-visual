@@ -43,7 +43,14 @@ function parseDateStr(str: string): number {
 
 function normalizeForMatch(name: string): string {
   if (!name) return '';
-  let s = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // Strip invisible/control Unicode characters first
+  let s = name.replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\uFEFF\u202A-\u202E]/g, '');
+  // Strip Telegram Markdown decorators
+  s = s.replace(/[_*`~|>]+/g, '');
+  s = s.replace(/^\s*[:.\\-]+|[:.\\-]+\s*$/g, '');
+  s = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // Normalize whitespace
+  s = s.replace(/\s+/g, ' ').trim();
   s = s.replace(/^(movistar|m\+|m\.|m\s+)/, '');
   s = s.replace(/\b(hd|fhd|uhd|4k|1080p|1080|720p|720)\b/g, '');
   s = s.replace(/[^\w]/g, '');

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Play, Tv, Sun, Moon, Settings, RefreshCw } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import TelegramTab from './components/TelegramTab';
+import { normalizeForEpgMatch } from './utils/normalize';
 
 function App() {
   const [engineStatus, setEngineStatus] = useState<string>('checking');
@@ -199,48 +200,39 @@ function App() {
 
   // Helper functions for favorites
   const addToFavorites = (channelName: string) => {
-    const cleanedName = channelName
-      .replace(/[^\p{L}\p{N}\s]/gu, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    if (!favorites.includes(cleanedName)) {
-      setFavorites([...favorites, cleanedName].sort((a, b) => a.localeCompare(b, 'es')));
+    // Store the normalized key so matching is robust regardless of control chars / quality tags
+    const key = normalizeForEpgMatch(channelName);
+    if (!key) return;
+    if (!favorites.includes(key)) {
+      setFavorites([...favorites, key].sort((a, b) => a.localeCompare(b, 'es')));
     }
   };
 
   const removeFromFavorites = (channelName: string) => {
-    const cleanedName = channelName
-      .replace(/[^\p{L}\p{N}\s]/gu, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    setFavorites(favorites.filter(f => f !== cleanedName).sort((a, b) => a.localeCompare(b, 'es')));
+    const key = normalizeForEpgMatch(channelName);
+    setFavorites(favorites.filter(f => f !== key).sort((a, b) => a.localeCompare(b, 'es')));
   };
 
   const isFavorite = (channelName: string) => {
-    const cleanedName = channelName
-      .replace(/[^\p{L}\p{N}\s]/gu, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    return favorites.includes(cleanedName);
+    const key = normalizeForEpgMatch(channelName);
+    return favorites.includes(key);
   };
 
   // Find matching channels for favorites
   const getFavoriteMatches = () => {
+    // Build a map of normKey -> first channel in that group
+    const keyToChannel = new Map<string, Channel>();
+    for (const ch of tgChannels) {
+      const k = normalizeForEpgMatch(ch.name);
+      if (k && !keyToChannel.has(k)) {
+        keyToChannel.set(k, ch);
+      }
+    }
+
     return favorites
-      .map(favName => {
-        const match = tgChannels.find(ch => {
-          const cleanChName = ch.name
-            .replace(/[^\p{L}\p{N}\s]/gu, '')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .toLowerCase();
-          const cleanFavName = favName.toLowerCase();
-          return cleanChName.includes(cleanFavName) || cleanFavName.includes(cleanChName);
-        });
-        return match ? { favoriteName: favName, channel: match } : null;
+      .map(favKey => {
+        const channel = keyToChannel.get(favKey);
+        return channel ? { favoriteName: favKey, channel } : null;
       })
       .filter((item): item is { favoriteName: string; channel: Channel } => item !== null)
       .sort((a, b) => a.favoriteName.localeCompare(b.favoriteName, 'es'));

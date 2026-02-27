@@ -236,6 +236,16 @@ async def main():
                             if name == "Unknown":
                                 name = f"Stream {ace_id[:6]}"
 
+                            # Strip Telegram Markdown decorators and trailing punctuation
+                            # e.g. "__**M+ LALIGA TV HD:**__" -> "M+ LALIGA TV HD"
+                            name = re.sub(
+                                r"[_*`~|>]+", "", name
+                            )  # remove markdown chars
+                            name = name.strip(
+                                " :-."
+                            )  # strip trailing/leading punctuation
+                            name = re.sub(r"\s+", " ", name).strip()
+
                             local_data.append(
                                 {
                                     "name": name,

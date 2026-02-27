@@ -1,25 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List, Loader2 } from 'lucide-react';
-
-// Helper function to clean channel names
-const cleanChannelName = (name: string): string => {
-  if (!name) return '';
-  // Remove special characters (keep letters including accented, numbers, and spaces)
-  // \p{L} matches any kind of letter from any language (including accented)
-  return name
-    .replace(/[^\p{L}\p{N}\s]/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
-
-const normalizeForEpgMatch = (name: string): string => {
-  if (!name) return '';
-  let s = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  s = s.replace(/^(movistar|m\+|m\.|m\s+)/, '');
-  s = s.replace(/\b(hd|fhd|uhd|4k|1080p|1080|720p|720)\b/g, '');
-  s = s.replace(/[^\w]/g, '');
-  return s;
-};
+import { normalizeForEpgMatch, cleanChannelName, getDisplayName, extractQuality } from '../utils/normalize';
 
 const findEpgMatch = (channelName: string, epgList: EPGProgram[]): EPGProgram | null => {
   const normCh = normalizeForEpgMatch(channelName);
@@ -39,25 +20,6 @@ const findChannelLogo = (channelName: string, logos: Record<string, string>): st
   return logos[normCh] || null;
 };
 
-const QUALITY_TAGS = ['UHD', 'FHD', '4K', '1080p', '1080', '720p', '720', 'HD'];
-
-const extractQuality = (name: string): string => {
-  const upper = name.toUpperCase();
-  for (const tag of QUALITY_TAGS) {
-    const regex = new RegExp(`\\b${tag}\\b`, 'i');
-    if (regex.test(upper)) return tag.toUpperCase();
-  }
-  return '';
-};
-
-const getDisplayName = (name: string): string => {
-  // Remove quality tags and clean up
-  let s = name;
-  for (const tag of QUALITY_TAGS) {
-    s = s.replace(new RegExp(`\\b${tag}\\b`, 'gi'), '');
-  }
-  return s.replace(/\s+/g, ' ').trim();
-};
 
 interface ChannelGroup {
   key: string;
