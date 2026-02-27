@@ -77,11 +77,13 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
   const activeGroupRef = useRef<ChannelGroup | undefined>(undefined);
   const activeChannelIdRef = useRef<string>('');
   const autoSwitchRef = useRef<boolean>(false);
+  const isBufferingRef = useRef<boolean>(false);
 
 
   // Sincronizar refs con estados para acceso desde timers
   useEffect(() => { activeGroupRef.current = activeGroup; }, [activeGroup]);
   useEffect(() => { activeChannelIdRef.current = activeChannelId; }, [activeChannelId]);
+  useEffect(() => { isBufferingRef.current = isBuffering; }, [isBuffering]);
   useEffect(() => {
     autoSwitchRef.current = autoSwitch;
     localStorage.setItem('ace_autoswitch', String(autoSwitch));
@@ -126,6 +128,23 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
     };
   }, []);
 
+  // Función extraída para poder reutilizarla
+  function doAutoSwitch() {
+    if (autoSwitchTimerRef.current) {
+      clearTimeout(autoSwitchTimerRef.current);
+      autoSwitchTimerRef.current = null;
+    }
+    const currentGroup = activeGroupRef.current;
+    const currentId = activeChannelIdRef.current;
+    if (!currentGroup || currentGroup.channels.length <= 1) return;
+    const currentIdx = currentGroup.channels.findIndex(ch => ch.id === currentId);
+    const nextIdx = (currentIdx + 1) % currentGroup.channels.length;
+    const nextChannel = currentGroup.channels[nextIdx];
+    setActiveChannelId(nextChannel.id);
+    const nextCleanId = nextChannel.id.replace('acestream://', '').trim();
+    handlePlay(nextCleanId);
+  }
+
   // Retry function
   const handleRetry = useCallback(() => {
     if (retryCountRef.current < maxRetries) {
@@ -145,10 +164,30 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
         setStreamUrl(prev => prev + '?retry=' + Date.now());
       }, 2000);
     } else {
-      setStatus('Error fatal - usa VLC');
-      setError('No se pudo conectar después de varios intentos. Intenta abrirlo en VLC.');
+      if (autoSwitchRef.current) {
+        doAutoSwitch();
+      } else {
+        setStatus('Error fatal - usa VLC');
+        setError('No se pudo conectar después de varios intentos. Intenta abrirlo en VLC.');
+      }
     }
   }, []);
+
+  // Reactionar al toggle manual de autoSwitch mientras el video carga
+  useEffect(() => {
+    if (autoSwitch && isBufferingRef.current) {
+      // Se activó mientras estaba esperando: arrancar el timer ahora mismo
+      if (!autoSwitchTimerRef.current) {
+        autoSwitchTimerRef.current = setTimeout(doAutoSwitch, 10000);
+      }
+    } else if (!autoSwitch) {
+      // Se desactivó: cancelar cualquier timer activo
+      if (autoSwitchTimerRef.current) {
+        clearTimeout(autoSwitchTimerRef.current);
+        autoSwitchTimerRef.current = null;
+      }
+    }
+  }, [autoSwitch]); // Solo depende de autoSwitch para ejecutarse en el toggle
 
   // Initialize HLS player when stream URL changes
   useEffect(() => {
@@ -242,7 +281,7 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
     }
   }, [isPlaying, streamUrl, isRetrying, handleRetry]);
 
-  const handlePlay = async (overrideId?: string) => {
+  async function handlePlay(overrideId?: string) {
     const targetId = (typeof overrideId === 'string' ? overrideId : streamId);
     
     if (!targetId) return;
@@ -285,17 +324,7 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
       if (autoSwitchRef.current) {
         const group = activeGroupRef.current;
         if (group && group.channels.length > 1) {
-          autoSwitchTimerRef.current = setTimeout(() => {
-            const currentGroup = activeGroupRef.current;
-            const currentId = activeChannelIdRef.current;
-            if (!currentGroup) return;
-            const currentIdx = currentGroup.channels.findIndex(ch => ch.id === currentId);
-            const nextIdx = (currentIdx + 1) % currentGroup.channels.length;
-            const nextChannel = currentGroup.channels[nextIdx];
-            setActiveChannelId(nextChannel.id);
-            const nextCleanId = nextChannel.id.replace('acestream://', '').trim();
-            handlePlay(nextCleanId);
-          }, 10000);
+          autoSwitchTimerRef.current = setTimeout(doAutoSwitch, 10000);
         }
       }
 
