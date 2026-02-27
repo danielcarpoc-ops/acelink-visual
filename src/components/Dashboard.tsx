@@ -68,6 +68,24 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
   const [activeGroup, setActiveGroup] = useState<ChannelGroup | undefined>(undefined);
   const [activeChannelId, setActiveChannelId] = useState<string>('');
 
+  // Auto-switch state — persistido en localStorage
+  const [autoSwitch, setAutoSwitch] = useState<boolean>(() => {
+    return localStorage.getItem('ace_autoswitch') === 'true';
+  });
+  const autoSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Refs para leer valores actuales desde el timer (evita closures obsoletos)
+  const activeGroupRef = useRef<ChannelGroup | undefined>(undefined);
+  const activeChannelIdRef = useRef<string>('');
+  const autoSwitchRef = useRef<boolean>(false);
+
+
+  // Sincronizar refs con estados para acceso desde timers
+  useEffect(() => { activeGroupRef.current = activeGroup; }, [activeGroup]);
+  useEffect(() => { activeChannelIdRef.current = activeChannelId; }, [activeChannelId]);
+  useEffect(() => {
+    autoSwitchRef.current = autoSwitch;
+    localStorage.setItem('ace_autoswitch', String(autoSwitch));
+  }, [autoSwitch]);
 
   useEffect(() => {
     if (initialStreamId) {
@@ -144,9 +162,16 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
       retryCountRef.current = 0;
       setRetryCount(0);
 
-      // Quitar overlay cuando el vídeo muestra imagen real — definido aquí para poder limpiarlo
-      const handlePlaying = () => setIsBuffering(false);
-      video.addEventListener('playing', handlePlaying);
+        // Quitar overlay cuando el vídeo muestra imagen real — definido aquí para poder limpiarlo
+        const handlePlaying = () => {
+          setIsBuffering(false);
+          // Reproducción conseguida: cancelar el timer de auto-switch
+          if (autoSwitchTimerRef.current) {
+            clearTimeout(autoSwitchTimerRef.current);
+            autoSwitchTimerRef.current = null;
+          }
+        };
+        video.addEventListener('playing', handlePlaying);
 
       if (Hls.isSupported()) {
         hlsRef.current = new Hls({
@@ -224,6 +249,13 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
     if (typeof overrideId !== 'string') {
       setPlayOrigin('manual');
     }
+
+    // Cancelar cualquier timer de auto-switch pendiente
+    if (autoSwitchTimerRef.current) {
+      clearTimeout(autoSwitchTimerRef.current);
+      autoSwitchTimerRef.current = null;
+    }
+
     setLoading(true);
     setError('');
     setStatus('Conectando...');
@@ -248,6 +280,24 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
       setIsBuffering(true);
       setStatus('Esperando al motor de Ace Stream...');
       setStreamUrl(hlsUrl);
+
+      // Arrancar timer de auto-switch si está activado y hay grupo con varios enlaces
+      if (autoSwitchRef.current) {
+        const group = activeGroupRef.current;
+        if (group && group.channels.length > 1) {
+          autoSwitchTimerRef.current = setTimeout(() => {
+            const currentGroup = activeGroupRef.current;
+            const currentId = activeChannelIdRef.current;
+            if (!currentGroup) return;
+            const currentIdx = currentGroup.channels.findIndex(ch => ch.id === currentId);
+            const nextIdx = (currentIdx + 1) % currentGroup.channels.length;
+            const nextChannel = currentGroup.channels[nextIdx];
+            setActiveChannelId(nextChannel.id);
+            const nextCleanId = nextChannel.id.replace('acestream://', '').trim();
+            handlePlay(nextCleanId);
+          }, 10000);
+        }
+      }
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -483,6 +533,11 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
       {(isPlaying || loading) && (
         <button 
           onClick={() => {
+            // Cancelar auto-switch si estaba en marcha
+            if (autoSwitchTimerRef.current) {
+              clearTimeout(autoSwitchTimerRef.current);
+              autoSwitchTimerRef.current = null;
+            }
             setIsPlaying(false);
             setLoading(false);
             setIsBuffering(false);
@@ -542,6 +597,21 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
                   </button>
                 );
               })}
+              {/* Botón toggle Cambio automático */}
+              <button
+                onClick={() => setAutoSwitch(prev => !prev)}
+                className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  autoSwitch
+                    ? 'bg-amber-500 text-white'
+                    : isDarkMode
+                      ? 'bg-[#333] text-gray-400 hover:bg-[#444]'
+                      : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                }`}
+                title={autoSwitch ? 'Cambio automático activado (10s)' : 'Activar cambio automático de enlace'}
+              >
+                <RefreshCw size={12} />
+                Auto
+              </button>
             </div>
           </div>
         );
