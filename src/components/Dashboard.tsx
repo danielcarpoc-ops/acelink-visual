@@ -46,6 +46,7 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
   // Track whether current playback was started from channels or manually
   const [playOrigin, setPlayOrigin] = useState<'channel' | 'event' | 'favorites' | 'manual'>('manual');
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   
   // PiP and Always on Top state
   const [isPiPActive, setIsPiPActive] = useState(false);
@@ -66,7 +67,7 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
   // Channel switcher state
   const [activeGroup, setActiveGroup] = useState<ChannelGroup | undefined>(undefined);
   const [activeChannelId, setActiveChannelId] = useState<string>('');
-  const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null);
+
 
   useEffect(() => {
     if (initialStreamId) {
@@ -74,7 +75,6 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
         setPlayOrigin(streamOrigin || 'manual');
         setActiveGroup(channelGroup);
         setActiveChannelId(initialStreamId);
-        setPendingSwitchId(null);
         const cleanId = initialStreamId.replace('acestream://', '').trim();
         setTimeout(() => handlePlay(cleanId), 100);
     }
@@ -114,6 +114,7 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
       retryCountRef.current += 1;
       setRetryCount(retryCountRef.current);
       setIsRetrying(true);
+      setIsBuffering(true);
       setStatus(`Reconectando ${retryCountRef.current}/${maxRetries}...`);
       
       if (hlsRef.current) {
@@ -143,6 +144,10 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
       retryCountRef.current = 0;
       setRetryCount(0);
 
+      // Quitar overlay cuando el vídeo muestra imagen real — definido aquí para poder limpiarlo
+      const handlePlaying = () => setIsBuffering(false);
+      video.addEventListener('playing', handlePlaying);
+
       if (Hls.isSupported()) {
         hlsRef.current = new Hls({
           debug: false,
@@ -161,11 +166,13 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
           video.play().catch(err => {
             console.log('Auto-play prevented:', err);
             setStatus('Pulsa play para iniciar');
+            setIsBuffering(false);
           });
         });
 
         hlsRef.current.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
+            setIsBuffering(false);
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
                 if (retryCountRef.current < maxRetries && !isRetrying) {
@@ -199,28 +206,29 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
         setError('Tu navegador no soporta la reproducción HLS');
         setStatus('No soportado');
       }
-    }
 
-    return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-    };
+      return () => {
+        video.removeEventListener('playing', handlePlaying);
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+      };
+    }
   }, [isPlaying, streamUrl, isRetrying, handleRetry]);
 
   const handlePlay = async (overrideId?: string) => {
     const targetId = (typeof overrideId === 'string' ? overrideId : streamId);
     
     if (!targetId) return;
-    // If no overrideId it means user triggered play manually from the input
     if (typeof overrideId !== 'string') {
       setPlayOrigin('manual');
     }
     setLoading(true);
     setError('');
-    setStatus('Inicializando...');
+    setStatus('Conectando...');
     setIsPlaying(false);
+    setIsBuffering(false);
     setRetryCount(0);
     retryCountRef.current = 0;
 
@@ -233,13 +241,13 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
       
       const proxyUrl = await window.electronAPI.getProxyUrl(cleanId);
       const hlsUrl = proxyUrl.replace('/stream?', '/manifest.m3u8?');
-      setStreamUrl(hlsUrl);
-      
-      setStatus('Esperando al motor de Ace Stream...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      setIsPlaying(true);
+
+      // Mostrar el player inmediatamente con overlay de buffering
       setLoading(false);
+      setIsPlaying(true);
+      setIsBuffering(true);
+      setStatus('Esperando al motor de Ace Stream...');
+      setStreamUrl(hlsUrl);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -471,17 +479,18 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
         </div>
       )}
 
-      {/* Back button - Show when playing */}
-      {isPlaying && (
+      {/* Back button - Show when playing or loading */}
+      {(isPlaying || loading) && (
         <button 
           onClick={() => {
             setIsPlaying(false);
+            setLoading(false);
+            setIsBuffering(false);
             setStreamUrl('');
             setError('');
             setStatus('');
             setActiveGroup(undefined);
             setActiveChannelId('');
-            setPendingSwitchId(null);
             if (hlsRef.current) {
               hlsRef.current.destroy();
               hlsRef.current = null;
@@ -499,8 +508,8 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
         </button>
       )}
 
-      {/* Channel switcher - show when playing from a group (not manual) */}
-      {isPlaying && playOrigin !== 'manual' && activeGroup && activeGroup.channels.length > 1 && (() => {
+      {/* Channel switcher - show when playing/loading from a group (not manual) */}
+      {(isPlaying || loading) && playOrigin !== 'manual' && activeGroup && activeGroup.channels.length > 1 && (() => {
         const labels = buildSwitcherLabels(activeGroup.channels);
         return (
           <div className="mb-4">
@@ -514,7 +523,11 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
                   <button
                     key={ch.id}
                     onClick={() => {
-                      if (!isActive) setPendingSwitchId(ch.id);
+                      if (!isActive) {
+                        setActiveChannelId(ch.id);
+                        const cleanId = ch.id.replace('acestream://', '').trim();
+                        handlePlay(cleanId);
+                      }
                     }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                       isActive
@@ -530,46 +543,17 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
                 );
               })}
             </div>
-
-            {/* Inline confirmation banner */}
-            {pendingSwitchId && (() => {
-              const pendingIdx = activeGroup.channels.findIndex(c => c.id === pendingSwitchId);
-              const pendingLabel = pendingIdx >= 0 ? labels[pendingIdx] : '';
-              return (
-                <div className={`mt-2 flex items-center gap-3 px-4 py-2 rounded-lg text-sm ${isDarkMode ? 'bg-[#2a2a2a] border border-[#444]' : 'bg-gray-100 border border-gray-300'}`}>
-                  <span className={isDarkMode ? 'text-gray-300' : 'text-gray-700'}>
-                    ¿Cambiar a <span className="font-semibold">{pendingLabel}</span>?
-                  </span>
-                  <button
-                    onClick={async () => {
-                      const id = pendingSwitchId;
-                      setPendingSwitchId(null);
-                      setActiveChannelId(id);
-                      const cleanId = id.replace('acestream://', '').trim();
-                      await handlePlay(cleanId);
-                    }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg transition-colors font-medium"
-                  >
-                    Sí
-                  </button>
-                  <button
-                    onClick={() => setPendingSwitchId(null)}
-                    className={`px-3 py-1 rounded-lg transition-colors ${isDarkMode ? 'bg-[#444] hover:bg-[#555] text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              );
-            })()}
           </div>
         );
       })()}
 
-      {/* Loading spinner */}
+      {/* Loading spinner — mismo recuadro que el player pero con overlay de carga */}
       {loading && (
-        <div className="flex flex-col items-center justify-center py-20">
-          <Loader2 className={`w-10 h-10 animate-spin ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
-          <p className={`mt-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{status || 'Cargando stream...'}</p>
+        <div className="bg-black rounded-2xl overflow-hidden shadow-2xl aspect-video relative flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-10 h-10 animate-spin text-blue-400" />
+            <p className="text-gray-300 text-sm">{status || 'Conectando...'}</p>
+          </div>
         </div>
       )}
 
@@ -585,8 +569,18 @@ const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: 
             style={{ objectFit: 'contain' }}
           />
           
-          {/* Status overlay */}
-          {status && status !== 'Reproduciendo' && (
+          {/* Buffering overlay — mientras HLS negocia el manifiesto */}
+          {isBuffering && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10">
+              <Loader2 className="w-10 h-10 animate-spin text-blue-400" />
+              <p className="mt-3 text-gray-300 text-sm">
+                {(!status || status === 'Reproduciendo') ? 'Esperando al motor de Ace Stream...' : status}
+              </p>
+            </div>
+          )}
+
+          {/* Status overlay — visible cuando no está en buffering y hay algo que mostrar */}
+          {!isBuffering && status && status !== 'Reproduciendo' && (
             <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-sm text-gray-300">
               {status}
               {retryCount > 0 && retryCount < maxRetries && (
