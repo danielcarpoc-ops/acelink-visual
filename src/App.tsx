@@ -10,6 +10,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('telegram');
   const [pendingStream, setPendingStream] = useState<string | null>(null);
   const [streamOrigin, setStreamOrigin] = useState<'channel' | 'event' | 'favorites' | 'manual'>('manual');
+  const [pendingGroup, setPendingGroup] = useState<{ displayName: string; channels: { id: string; name: string }[] } | undefined>(undefined);
   
   // Theme state
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -41,9 +42,10 @@ function App() {
   }, [fontSize]);
 
   // Listen for play requests from other tabs
-  const handlePlayStream = (e: CustomEvent<{ id: string; origin: 'channel' | 'event' | 'favorites' }>) => {
+  const handlePlayStream = (e: CustomEvent<{ id: string; origin: 'channel' | 'event' | 'favorites'; group?: { displayName: string; channels: { id: string; name: string }[] } }>) => {
     setPendingStream(e.detail.id);
     setStreamOrigin(e.detail.origin);
+    setPendingGroup(e.detail.group);
     setActiveTab('dashboard');
   };
 
@@ -305,7 +307,7 @@ function App() {
 
         {/* Content */}
         <div className={`flex-1 overflow-auto p-6 ${isDarkMode ? 'bg-[#1a1a1a] text-white' : 'bg-gray-100 text-gray-900'}`}>
-          {activeTab === 'dashboard' && <Dashboard initialStreamId={pendingStream || undefined} streamOrigin={streamOrigin} isDarkMode={isDarkMode} />}
+          {activeTab === 'dashboard' && <Dashboard initialStreamId={pendingStream || undefined} streamOrigin={streamOrigin} channelGroup={pendingGroup} isDarkMode={isDarkMode} />}
           {activeTab === 'telegram' && (
             <TelegramTab 
               phone={tgPhone} 

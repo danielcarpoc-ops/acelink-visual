@@ -12,9 +12,15 @@ import {
 } from 'lucide-react';
 import Hls from 'hls.js';
 
+interface ChannelGroup {
+  displayName: string;
+  channels: { id: string; name: string }[];
+}
+
 interface DashboardProps {
   initialStreamId?: string;
   streamOrigin?: 'channel' | 'event' | 'favorites' | 'manual';
+  channelGroup?: ChannelGroup;
   isDarkMode: boolean;
 }
 
@@ -23,7 +29,7 @@ interface ChromecastDevice {
   host: string;
 }
 
-const Dashboard = ({ initialStreamId, streamOrigin, isDarkMode }: DashboardProps) => {
+const Dashboard = ({ initialStreamId, streamOrigin, channelGroup, isDarkMode }: DashboardProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -57,10 +63,18 @@ const Dashboard = ({ initialStreamId, streamOrigin, isDarkMode }: DashboardProps
   const [recordingTime, setRecordingTime] = useState(0);
   const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Channel switcher state
+  const [activeGroup, setActiveGroup] = useState<ChannelGroup | undefined>(undefined);
+  const [activeChannelId, setActiveChannelId] = useState<string>('');
+  const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null);
+
   useEffect(() => {
     if (initialStreamId) {
         setStreamId(initialStreamId);
         setPlayOrigin(streamOrigin || 'manual');
+        setActiveGroup(channelGroup);
+        setActiveChannelId(initialStreamId);
+        setPendingSwitchId(null);
         const cleanId = initialStreamId.replace('acestream://', '').trim();
         setTimeout(() => handlePlay(cleanId), 100);
     }
@@ -396,6 +410,32 @@ const Dashboard = ({ initialStreamId, streamOrigin, isDarkMode }: DashboardProps
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Build labels for channel switcher buttons, numbering duplicates
+  // e.g. [FHD, FHD, FHD, HD] -> ["FHD 1", "FHD 2", "FHD 3", "HD"]
+  const buildSwitcherLabels = (channels: { id: string; name: string }[]): string[] => {
+    const QUALITY_TAGS = ['UHD', 'FHD', '4K', '1080p', '1080', '720p', '720', 'HD'];
+    const extractQ = (name: string): string => {
+      const upper = name.toUpperCase();
+      for (const tag of QUALITY_TAGS) {
+        if (new RegExp(`\\b${tag}\\b`, 'i').test(upper)) return tag.toUpperCase();
+      }
+      return '';
+    };
+    const qualities = channels.map(ch => extractQ(ch.name) || 'Enlace');
+    // Count occurrences of each quality
+    const counts: Record<string, number> = {};
+    for (const q of qualities) counts[q] = (counts[q] || 0) + 1;
+    // Assign numbered labels only when quality appears more than once
+    const cursors: Record<string, number> = {};
+    return qualities.map(q => {
+      if (counts[q] > 1) {
+        cursors[q] = (cursors[q] || 0) + 1;
+        return `${q} ${cursors[q]}`;
+      }
+      return q;
+    });
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <h2 className={`text-3xl font-bold mb-6 flex items-center gap-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -439,6 +479,9 @@ const Dashboard = ({ initialStreamId, streamOrigin, isDarkMode }: DashboardProps
             setStreamUrl('');
             setError('');
             setStatus('');
+            setActiveGroup(undefined);
+            setActiveChannelId('');
+            setPendingSwitchId(null);
             if (hlsRef.current) {
               hlsRef.current.destroy();
               hlsRef.current = null;
@@ -455,6 +498,72 @@ const Dashboard = ({ initialStreamId, streamOrigin, isDarkMode }: DashboardProps
           ← Volver
         </button>
       )}
+
+      {/* Channel switcher - show when playing from a group (not manual) */}
+      {isPlaying && playOrigin !== 'manual' && activeGroup && activeGroup.channels.length > 1 && (() => {
+        const labels = buildSwitcherLabels(activeGroup.channels);
+        return (
+          <div className="mb-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                {activeGroup.displayName}:
+              </span>
+              {activeGroup.channels.map((ch, i) => {
+                const isActive = ch.id === activeChannelId;
+                return (
+                  <button
+                    key={ch.id}
+                    onClick={() => {
+                      if (!isActive) setPendingSwitchId(ch.id);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-blue-600 text-white'
+                        : isDarkMode
+                          ? 'bg-[#333] text-gray-300 hover:bg-[#444]'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    <Play size={12} />
+                    {labels[i]}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Inline confirmation banner */}
+            {pendingSwitchId && (() => {
+              const pendingIdx = activeGroup.channels.findIndex(c => c.id === pendingSwitchId);
+              const pendingLabel = pendingIdx >= 0 ? labels[pendingIdx] : '';
+              return (
+                <div className={`mt-2 flex items-center gap-3 px-4 py-2 rounded-lg text-sm ${isDarkMode ? 'bg-[#2a2a2a] border border-[#444]' : 'bg-gray-100 border border-gray-300'}`}>
+                  <span className={isDarkMode ? 'text-gray-300' : 'text-gray-700'}>
+                    ¿Cambiar a <span className="font-semibold">{pendingLabel}</span>?
+                  </span>
+                  <button
+                    onClick={async () => {
+                      const id = pendingSwitchId;
+                      setPendingSwitchId(null);
+                      setActiveChannelId(id);
+                      const cleanId = id.replace('acestream://', '').trim();
+                      await handlePlay(cleanId);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg transition-colors font-medium"
+                  >
+                    Sí
+                  </button>
+                  <button
+                    onClick={() => setPendingSwitchId(null)}
+                    className={`px-3 py-1 rounded-lg transition-colors ${isDarkMode ? 'bg-[#444] hover:bg-[#555] text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        );
+      })()}
 
       {/* Loading spinner */}
       {loading && (

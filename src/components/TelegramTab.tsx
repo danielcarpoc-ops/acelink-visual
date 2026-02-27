@@ -186,8 +186,8 @@ const TelegramTab = ({
     }
   };
 
-  const playChannel = (id: string) => {
-    const event = new CustomEvent('play-stream', { detail: { id, origin: activeCategory } });
+  const playChannel = (id: string, group: { displayName: string; channels: { id: string | number; name: string }[] }) => {
+    const event = new CustomEvent('play-stream', { detail: { id, origin: activeCategory, group } });
     window.dispatchEvent(event);
   };
 
@@ -560,7 +560,7 @@ const TelegramTab = ({
                     return (
                       <button
                         key={i}
-                        onClick={() => playChannel(String(ch.id))}
+                        onClick={() => playChannel(String(ch.id), { displayName, channels: groupChannels.map(c => ({ id: String(c.id), name: c.name })) })}
                         className={`w-full py-2 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                       >
                         <Play size={16} /> {quality || `Enlace ${i + 1}`}
@@ -626,7 +626,7 @@ const TelegramTab = ({
                       return (
                         <button
                           key={i}
-                          onClick={() => playChannel(String(ch.id))}
+                          onClick={() => playChannel(String(ch.id), { displayName: group.displayName, channels: group.channels.map(c => ({ id: String(c.id), name: c.name })) })}
                           className={`w-full py-2 rounded-lg flex items-center justify-center gap-1.5 text-sm transition-colors ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                         >
                           <Play size={14} />
@@ -672,7 +672,7 @@ const TelegramTab = ({
                       return (
                         <button
                           key={i}
-                          onClick={() => playChannel(String(ch.id))}
+                          onClick={() => playChannel(String(ch.id), { displayName: group.displayName, channels: group.channels.map(c => ({ id: String(c.id), name: c.name })) })}
                           className={`w-16 py-2 rounded-lg flex items-center justify-center gap-1.5 text-sm transition-colors whitespace-nowrap ${isDarkMode ? 'bg-[#1a1a1a] hover:bg-blue-600 hover:text-white text-gray-300' : 'bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700'}`}
                         >
                           <Play size={14} />
