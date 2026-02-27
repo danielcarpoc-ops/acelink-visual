@@ -14,6 +14,7 @@ import Hls from 'hls.js';
 
 interface DashboardProps {
   initialStreamId?: string;
+  streamOrigin?: 'channel' | 'event' | 'favorites' | 'manual';
   isDarkMode: boolean;
 }
 
@@ -22,7 +23,7 @@ interface ChromecastDevice {
   host: string;
 }
 
-const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
+const Dashboard = ({ initialStreamId, streamOrigin, isDarkMode }: DashboardProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -36,6 +37,8 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>('');
   const [retryCount, setRetryCount] = useState(0);
+  // Track whether current playback was started from channels or manually
+  const [playOrigin, setPlayOrigin] = useState<'channel' | 'event' | 'favorites' | 'manual'>('manual');
   const [isRetrying, setIsRetrying] = useState(false);
   
   // PiP and Always on Top state
@@ -57,6 +60,7 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
   useEffect(() => {
     if (initialStreamId) {
         setStreamId(initialStreamId);
+        setPlayOrigin(streamOrigin || 'manual');
         const cleanId = initialStreamId.replace('acestream://', '').trim();
         setTimeout(() => handlePlay(cleanId), 100);
     }
@@ -195,6 +199,10 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
     const targetId = (typeof overrideId === 'string' ? overrideId : streamId);
     
     if (!targetId) return;
+    // If no overrideId it means user triggered play manually from the input
+    if (typeof overrideId !== 'string') {
+      setPlayOrigin('manual');
+    }
     setLoading(true);
     setError('');
     setStatus('Inicializando...');
@@ -428,7 +436,6 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
         <button 
           onClick={() => {
             setIsPlaying(false);
-            setStreamId('');
             setStreamUrl('');
             setError('');
             setStatus('');
@@ -436,11 +443,16 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
               hlsRef.current.destroy();
               hlsRef.current = null;
             }
-            window.dispatchEvent(new CustomEvent('go-to-channels'));
+            // If played from manual input, stay on dashboard (show the input form again)
+            // Otherwise go back to the originating tab/category
+            if (playOrigin !== 'manual') {
+              setStreamId('');
+              window.dispatchEvent(new CustomEvent('go-to-channels', { detail: playOrigin }));
+            }
           }}
           className="mb-4 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
         >
-          ← Volver a Canales
+          ← Volver
         </button>
       )}
 
@@ -524,7 +536,6 @@ const Dashboard = ({ initialStreamId, isDarkMode }: DashboardProps) => {
                    title={isCasting ? `Transmitiendo en ${currentCastDevice}` : 'Enviar a TV (Chromecast)'}
                  >
                    <Cast size={18} />
-                   {isCasting && <span className="ml-1 text-xs">{currentCastDevice}</span>}
                  </button>
                  
                  {/* Chromecast Device Menu */}

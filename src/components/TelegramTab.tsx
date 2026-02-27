@@ -63,6 +63,7 @@ interface TelegramTabProps {
   isFavorite: (name: string) => boolean;
   getFavoriteMatches: () => { favoriteName: string; channel: Channel }[];
   isDarkMode: boolean;
+  initialCategory?: 'channel' | 'event' | 'favorites';
 }
 
 const TelegramTab = ({ 
@@ -77,7 +78,8 @@ const TelegramTab = ({
   removeFromFavorites,
   isFavorite,
   getFavoriteMatches,
-  isDarkMode
+  isDarkMode,
+  initialCategory
 }: TelegramTabProps) => {
   const [code, setCode] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
@@ -86,8 +88,15 @@ const TelegramTab = ({
   const [phoneCodeHash, setPhoneCodeHash] = useState('');
   const [codeType, setCodeType] = useState('');
   const [epgData, setEpgData] = useState<EPGProgram[]>([]);
-  const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>('channel');
+  const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>(initialCategory || 'channel');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Sync active category when returning from player
+  useEffect(() => {
+    if (initialCategory) {
+      setActiveCategory(initialCategory);
+    }
+  }, [initialCategory]);
 
   // Layout state
   const [layout, setLayout] = useState<'grid' | 'list'>(() => {
@@ -178,7 +187,7 @@ const TelegramTab = ({
   };
 
   const playChannel = (id: string) => {
-    const event = new CustomEvent('play-stream', { detail: id });
+    const event = new CustomEvent('play-stream', { detail: { id, origin: activeCategory } });
     window.dispatchEvent(event);
   };
 

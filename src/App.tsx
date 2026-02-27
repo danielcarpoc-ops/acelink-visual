@@ -9,6 +9,7 @@ function App() {
   const [isStartingEngine, setIsStartingEngine] = useState(false);
   const [activeTab, setActiveTab] = useState('telegram');
   const [pendingStream, setPendingStream] = useState<string | null>(null);
+  const [streamOrigin, setStreamOrigin] = useState<'channel' | 'event' | 'favorites' | 'manual'>('manual');
   
   // Theme state
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -40,13 +41,19 @@ function App() {
   }, [fontSize]);
 
   // Listen for play requests from other tabs
-  const handlePlayStream = (e: CustomEvent<string>) => {
-    setPendingStream(e.detail);
+  const handlePlayStream = (e: CustomEvent<{ id: string; origin: 'channel' | 'event' | 'favorites' }>) => {
+    setPendingStream(e.detail.id);
+    setStreamOrigin(e.detail.origin);
     setActiveTab('dashboard');
   };
 
-  // Listen for going back to channels
-  const handleGoToChannels = () => {
+  // Listen for going back — origin tells us which tab/category to restore
+  const handleGoToChannels = (e: Event) => {
+    const origin = (e as CustomEvent<string>).detail as 'channel' | 'event' | 'favorites' | 'manual' | undefined;
+    if (origin === 'event' || origin === 'favorites') {
+      // Switch to telegram tab; TelegramTab will need to know the category
+      setStreamOrigin(origin);
+    }
     setActiveTab('telegram');
   };
 
@@ -298,7 +305,7 @@ function App() {
 
         {/* Content */}
         <div className={`flex-1 overflow-auto p-6 ${isDarkMode ? 'bg-[#1a1a1a] text-white' : 'bg-gray-100 text-gray-900'}`}>
-          {activeTab === 'dashboard' && <Dashboard initialStreamId={pendingStream || undefined} isDarkMode={isDarkMode} />}
+          {activeTab === 'dashboard' && <Dashboard initialStreamId={pendingStream || undefined} streamOrigin={streamOrigin} isDarkMode={isDarkMode} />}
           {activeTab === 'telegram' && (
             <TelegramTab 
               phone={tgPhone} 
@@ -313,6 +320,7 @@ function App() {
               isFavorite={isFavorite}
               getFavoriteMatches={getFavoriteMatches}
               isDarkMode={isDarkMode}
+              initialCategory={streamOrigin !== 'manual' ? streamOrigin : undefined}
             />
           )}
           {activeTab === 'settings' && (
