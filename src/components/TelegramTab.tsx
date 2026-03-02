@@ -152,7 +152,7 @@ const TelegramTab = ({
   };
 
   const submitCode = async () => {
-    const res = (await sendCommand('submit_code', { code, phoneCodeHash })) as TelegramResponse;
+    const res = (await sendCommand('submit_code', { phone, code, phoneCodeHash })) as TelegramResponse;
     if (res.status === 'authorized') {
       setStep('authorized');
       fetchChannels();
@@ -162,7 +162,7 @@ const TelegramTab = ({
   };
 
   const requestSms = async () => {
-    const res = (await sendCommand('request_sms', { phoneCodeHash })) as TelegramResponse;
+    const res = (await sendCommand('request_sms', { phone, phoneCodeHash })) as TelegramResponse;
     if (res.status === 'needs_code') {
       setPhoneCodeHash(res.phone_code_hash || '');
       setCodeType(res.code_type || '');
