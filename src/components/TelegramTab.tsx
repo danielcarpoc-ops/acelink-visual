@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Phone, RefreshCw, Play, Star, Search, Trash2, LayoutGrid, List, Loader2 } from 'lucide-react';
+import { Send, Phone, RefreshCw, Play, Star, Search, LayoutGrid, List, Loader2 } from 'lucide-react';
 import { normalizeForEpgMatch, cleanChannelName, getDisplayName, extractQuality } from '../utils/normalize';
 
 const findEpgMatch = (channelName: string, epgList: EPGProgram[]): EPGProgram | null => {
