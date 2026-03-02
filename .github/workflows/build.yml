@@ -56,7 +56,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AceLink-Visual-Mac
-          path: release/*.dmg
+          path: release/*.zip
           
       - name: Upload Windows Artifacts
         if: matrix.os == 'windows-latest'
