@@ -36,10 +36,7 @@
     ],
     "mac": {
       "target": [
-        {
-          "target": "zip",
-          "arch": ["universal"]
-        }
+        "dmg"
       ],
       "identity": null,
       "hardenedRuntime": false,
