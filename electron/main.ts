@@ -200,28 +200,27 @@ const bootstrapUserData = () => {
 // Python Script Helper
 const runPythonScript = (command: Record<string, unknown>) => {
   return new Promise((resolve, reject) => {
-    const scriptPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'python/telegram_worker.py')
-      : path.join(__dirname, '../python/telegram_worker.py');
-
-    // Pass the userData path so the Python script can store session/config files
-    // in a writable location both in dev and production.
     const userDataPath = app.getPath('userData');
-
-    // Also pass the config source path as a fallback in case bootstrapUserData
-    // hasn't had a chance to copy it yet (e.g., first run race condition).
     const configSrcPath = app.isPackaged
       ? path.join(process.resourcesPath, 'config.json')
       : path.join(__dirname, '../config.json');
 
-    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-    const python = spawn(pythonCmd, [scriptPath], {
-      env: {
-        ...process.env,
-        ACELINK_USER_DATA: userDataPath,
-        ACELINK_CONFIG_FALLBACK: configSrcPath,
-      },
-    });
+    const env = {
+      ...process.env,
+      ACELINK_USER_DATA: userDataPath,
+      ACELINK_CONFIG_FALLBACK: configSrcPath,
+    };
+
+    let python;
+    if (app.isPackaged) {
+      const exeName = process.platform === 'win32' ? 'telegram_worker.exe' : 'telegram_worker';
+      const exePath = path.join(process.resourcesPath, 'python-bin', exeName);
+      python = spawn(exePath, [], { env });
+    } else {
+      const scriptPath = path.join(__dirname, '../python/telegram_worker.py');
+      const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+      python = spawn(pythonCmd, [scriptPath], { env });
+    }
     
     let output = '';
     let error = '';
