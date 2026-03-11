@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { Send, Phone, RefreshCw, Play, Star, Search, LayoutGrid, List, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Send, Phone, RefreshCw, Play, Star, Search, LayoutGrid, List, Loader2, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { normalizeForEpgMatch, cleanChannelName, getDisplayName, extractQuality } from '../utils/normalize';
 
 const findEpgMatch = (channelName: string, epgList: EPGProgram[]): EPGProgram | null => {
@@ -48,13 +49,14 @@ interface TelegramResponse {
   phone_code_hash?: string;
   code_type?: string;
   data?: Channel[];
+  qr_url?: string;
 }
 
 interface TelegramTabProps {
   phone: string;
   setPhone: (p: string) => void;
-  step: 'loading' | 'config' | 'code' | 'authorized';
-  setStep: (s: 'loading' | 'config' | 'code' | 'authorized') => void;
+  step: 'loading' | 'config' | 'code' | 'qr' | 'authorized';
+  setStep: (s: 'loading' | 'config' | 'code' | 'qr' | 'authorized') => void;
   channels: Channel[];
   setChannels: (c: Channel[]) => void;
   channelLogos: Record<string, string>;
@@ -87,6 +89,15 @@ const TelegramTab = ({
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [phoneCodeHash, setPhoneCodeHash] = useState('');
   const [codeType, setCodeType] = useState('');
+  const [smsAttempts, setSmsAttempts] = useState(0);
+  const [qrUrl, setQrUrl] = useState('');
+  const [qrPolling, setQrPolling] = useState(false);
+  const qrPollingRef = useRef(false);
+  const [floodWaitUntil, setFloodWaitUntil] = useState<number | null>(() => {
+    const saved = localStorage.getItem('tg_flood_until');
+    return saved ? parseInt(saved) : null;
+  });
+  const [floodSecondsLeft, setFloodSecondsLeft] = useState(0);
   const [epgData, setEpgData] = useState<EPGProgram[]>([]);
   const [activeCategory, setActiveCategory] = useState<'channel' | 'event' | 'favorites'>(initialCategory || 'channel');
   const [searchQuery, setSearchQuery] = useState('');
@@ -97,6 +108,23 @@ const TelegramTab = ({
       setActiveCategory(initialCategory);
     }
   }, [initialCategory]);
+
+  // Flood wait countdown
+  useEffect(() => {
+    if (!floodWaitUntil) return;
+    const tick = () => {
+      const left = Math.ceil((floodWaitUntil - Date.now()) / 1000);
+      if (left <= 0) {
+        setFloodSecondsLeft(0);
+        setFloodWaitUntil(null);
+        localStorage.removeItem('tg_flood_until');
+      } else {
+        setFloodSecondsLeft(left);
+        setTimeout(tick, 1000);
+      }
+    };
+    tick();
+  }, [floodWaitUntil]);
 
   // Layout state
   const [layout, setLayout] = useState<'grid' | 'list'>(() => {
@@ -133,6 +161,11 @@ const TelegramTab = ({
       setStatusMsg('Por favor, introduce tu número de teléfono');
       return;
     }
+    if (floodWaitUntil && Date.now() < floodWaitUntil) {
+      const left = Math.ceil((floodWaitUntil - Date.now()) / 1000);
+      setStatusMsg(`Demasiados intentos. Espera ${Math.ceil(left / 60)} minuto(s) antes de reintentar.`);
+      return;
+    }
     const res = (await sendCommand('login')) as TelegramResponse;
     if (res.status === 'needs_code') {
       setStep('code');
@@ -146,6 +179,12 @@ const TelegramTab = ({
     } else if (res.status === 'authorized') {
       setStep('authorized');
       fetchChannels();
+    } else if (res.message?.startsWith('flood_wait:')) {
+      const wait = parseInt(res.message.split(':')[1]) * 1000;
+      const until = Date.now() + wait;
+      setFloodWaitUntil(until);
+      localStorage.setItem('tg_flood_until', String(until));
+      setStatusMsg(`Demasiados intentos. Telegram bloquea nuevas peticiones ${Math.ceil(wait / 60000)} minuto(s). Espera e inténtalo de nuevo.`);
     } else {
       setStatusMsg(res.message || 'Error desconocido');
     }
@@ -166,15 +205,97 @@ const TelegramTab = ({
     if (res.status === 'needs_code') {
       setPhoneCodeHash(res.phone_code_hash || '');
       setCodeType(res.code_type || '');
-      const via = res.code_type?.includes('Sms') ? 'SMS'
-                : res.code_type?.includes('App') ? 'la app de Telegram'
-                : res.code_type?.includes('Call') ? 'llamada de voz'
+      setSmsAttempts(a => a + 1);
+      const newType = res.code_type || '';
+      const via = newType.includes('Sms') ? 'SMS'
+                : newType.includes('App') ? 'la app de Telegram'
+                : newType.includes('Call') ? 'llamada de voz'
                 : 'Telegram';
-      setStatusMsg(`Código reenviado por ${via}`);
+      if (newType.includes('Sms')) {
+        setStatusMsg('Código enviado por SMS. Revisa tus mensajes.');
+      } else {
+        setStatusMsg(`El código sigue siendo enviado por ${via}. Telegram decide el método según tu cuenta.`);
+      }
     } else {
       setStatusMsg(res.message || 'Error al solicitar SMS');
     }
   };
+
+  const startQrLogin = useCallback(async () => {
+    if (qrPollingRef.current) return;
+    qrPollingRef.current = true;
+    setQrPolling(true);
+    setStatusMsg('');
+    setQrUrl('');
+    setStep('qr');
+
+    // Step 1: Generate QR token (returns immediately)
+    setIsLoading(true);
+    try {
+      const res = (await window.electronAPI.telegramAction({ command: 'qr_login' })) as TelegramResponse;
+      setIsLoading(false);
+      
+      if (res.status === 'authorized') {
+        qrPollingRef.current = false;
+        setQrPolling(false);
+        setStep('authorized');
+        fetchChannels();
+        return;
+      } else if (res.status === 'qr_pending' && res.qr_url) {
+        setQrUrl(res.qr_url);
+      } else if (res.message?.startsWith('flood_wait:')) {
+        const wait = parseInt(res.message.split(':')[1]) * 1000;
+        const until = Date.now() + wait;
+        setFloodWaitUntil(until);
+        localStorage.setItem('tg_flood_until', String(until));
+        setStatusMsg(`Demasiados intentos. Espera ${Math.ceil(wait / 60000)} minuto(s).`);
+        qrPollingRef.current = false;
+        setQrPolling(false);
+        return;
+      } else {
+        setStatusMsg(res.message || 'Error al generar QR');
+        qrPollingRef.current = false;
+        setQrPolling(false);
+        return;
+      }
+    } catch (e) {
+      setIsLoading(false);
+      setStatusMsg('Error: ' + (e instanceof Error ? e.message : String(e)));
+      qrPollingRef.current = false;
+      setQrPolling(false);
+      return;
+    }
+
+    // Step 2: Poll with qr_check every 3 seconds
+    while (qrPollingRef.current) {
+      await new Promise(r => setTimeout(r, 3000));
+      if (!qrPollingRef.current) break;
+
+      try {
+        const res = (await window.electronAPI.telegramAction({ command: 'qr_check' })) as TelegramResponse;
+        
+        if (res.status === 'authorized') {
+          qrPollingRef.current = false;
+          setQrPolling(false);
+          setStep('authorized');
+          fetchChannels();
+          return;
+        } else if (res.status === 'qr_pending' && res.qr_url) {
+          // Token was refreshed (old one expired), update QR
+          setQrUrl(res.qr_url);
+        }
+      } catch {
+        // Ignore poll errors, keep trying
+      }
+    }
+  }, []);
+
+  const stopQrLogin = useCallback(() => {
+    qrPollingRef.current = false;
+    setQrPolling(false);
+    setQrUrl('');
+    setStep('config');
+  }, []);
 
   const fetchChannels = async () => {
     const res = (await sendCommand('fetch_channels')) as TelegramResponse;
@@ -190,6 +311,13 @@ const TelegramTab = ({
     const event = new CustomEvent('play-stream', { detail: { id, origin: activeCategory, group } });
     window.dispatchEvent(event);
   };
+
+  // Cleanup QR polling on unmount
+  useEffect(() => {
+    return () => {
+      qrPollingRef.current = false;
+    };
+  }, []);
 
   // Auto-connect on mount - check session without showing phone input
   const hasAutoConnected = useRef(false);
@@ -355,10 +483,19 @@ const TelegramTab = ({
 
           <button 
             onClick={handleLogin}
-            disabled={isLoading}
+            disabled={isLoading || (!!floodWaitUntil && Date.now() < floodWaitUntil)}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
           >
-            {isLoading ? 'Conectando...' : 'Conectar'}
+            {isLoading ? 'Conectando...' : (floodSecondsLeft > 0 ? `Espera ${Math.ceil(floodSecondsLeft / 60)} min` : 'Conectar')}
+          </button>
+
+          <button 
+            onClick={startQrLogin}
+            disabled={isLoading}
+            className={`w-full py-2 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${isDarkMode ? 'bg-[#333] hover:bg-[#444] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+          >
+            <QrCode size={16} />
+            Conectar con QR (sin código)
           </button>
           
           {statusMsg && <p className="text-red-400 text-sm mt-2">{statusMsg}</p>}
@@ -375,9 +512,12 @@ const TelegramTab = ({
           {codeType?.includes('Sms')
             ? 'Hemos enviado un código por SMS a tu teléfono.'
             : codeType?.includes('App')
-            ? 'Hemos enviado un código a tu app de Telegram. Ábrela y busca el mensaje de "Telegram".'
-            : 'Hemos enviado un código de verificación.'}
-        </p>
+            ? <>
+                Abre <strong>Telegram</strong> en tu móvil. Busca un mensaje del contacto{' '}
+                <strong>"Telegram"</strong> (no un bot, el contacto oficial) con el asunto{' '}
+                <strong>"Login code"</strong>. El código son 5 dígitos.
+              </>
+            : 'Hemos enviado un código de verificación.'}</p>
         
         <input 
           type="text" 
@@ -396,16 +536,77 @@ const TelegramTab = ({
         </button>
 
         {!codeType?.includes('Sms') && (
-          <button
-            onClick={requestSms}
-            disabled={isLoading}
-            className={`w-full py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${isDarkMode ? 'bg-[#333] hover:bg-[#444] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
-          >
-            {isLoading ? 'Enviando...' : 'No me llega — recibir por SMS'}
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={requestSms}
+              disabled={isLoading || smsAttempts >= 2}
+              className={`w-full py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${isDarkMode ? 'bg-[#333] hover:bg-[#444] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+            >
+              {isLoading ? 'Enviando...' : smsAttempts >= 2 ? 'No disponible por SMS' : 'No me llega — recibir por SMS'}
+            </button>
+            {smsAttempts >= 2 && (
+              <p className={`text-xs text-center ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                Telegram solo puede enviar el código a tu app para este número. Revisa los mensajes en Telegram del contacto <strong>"Telegram"</strong>.
+              </p>
+            )}
+          </div>
         )}
 
         {statusMsg && <p className={`text-sm mt-3 ${statusMsg.includes('Error') ? 'text-red-400' : 'text-green-400'}`}>{statusMsg}</p>}
+        
+        <div className={`mt-4 pt-4 border-t ${isDarkMode ? 'border-[#333]' : 'border-gray-200'}`}>
+          <button
+            onClick={startQrLogin}
+            disabled={isLoading}
+            className={`w-full py-2 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${isDarkMode ? 'bg-[#333] hover:bg-[#444] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+          >
+            <QrCode size={16} />
+            Usar código QR en su lugar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 'qr') {
+    return (
+      <div className={`max-w-md mx-auto p-6 ${isDarkMode ? 'bg-[#242424]' : 'bg-white'} rounded-2xl shadow-xl text-center`}>
+        <h2 className={`text-xl font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+          Login con QR
+        </h2>
+        <p className={`mb-6 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          Abre <strong>Telegram</strong> en tu móvil, ve a{' '}
+          <strong>Ajustes &gt; Dispositivos &gt; Vincular dispositivo</strong>{' '}
+          y escanea este código QR.
+        </p>
+
+        <div className="flex justify-center mb-6">
+          {qrUrl ? (
+            <div className="bg-white p-4 rounded-xl">
+              <QRCodeSVG value={qrUrl} size={200} level="M" />
+            </div>
+          ) : (
+            <div className={`w-[232px] h-[232px] rounded-xl flex items-center justify-center ${isDarkMode ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
+              <Loader2 size={32} className="animate-spin text-blue-400" />
+            </div>
+          )}
+        </div>
+
+        {qrPolling && (
+          <p className={`text-xs mb-4 flex items-center justify-center gap-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+            <Loader2 size={12} className="animate-spin" />
+            Esperando a que escanees el código...
+          </p>
+        )}
+
+        {statusMsg && <p className={`text-sm mb-3 ${statusMsg.includes('Error') ? 'text-red-400' : 'text-yellow-400'}`}>{statusMsg}</p>}
+
+        <button
+          onClick={stopQrLogin}
+          className={`w-full py-2 rounded-xl text-sm font-medium transition-colors ${isDarkMode ? 'bg-[#333] hover:bg-[#444] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+        >
+          Volver
+        </button>
       </div>
     );
   }

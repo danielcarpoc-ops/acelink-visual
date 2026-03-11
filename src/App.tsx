@@ -110,7 +110,7 @@ function App() {
   
   const [tgPhone, setTgPhone] = useState(localStorage.getItem('tg_phone') || '');
   const [tgChannels, setTgChannels] = useState<Channel[]>([]);
-  const [tgStep, setTgStep] = useState<'loading' | 'config' | 'code' | 'authorized'>('loading');
+  const [tgStep, setTgStep] = useState<'loading' | 'config' | 'code' | 'qr' | 'authorized'>('loading');
 
   const LOGOS_CACHE_KEY = 'channel_logos_cache';
   const LOGOS_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours

@@ -11,7 +11,12 @@ try:
 except:
     pass
 
+import base64
+
 from telethon import TelegramClient
+from telethon.errors import FloodWaitError
+from telethon.tl.functions.auth import ExportLoginTokenRequest, ImportLoginTokenRequest
+from telethon.tl.types.auth import LoginToken, LoginTokenMigrateTo, LoginTokenSuccess
 
 SESSION_FILE = "telegram_session"
 
@@ -31,8 +36,8 @@ _CONFIG_FALLBACK = os.environ.get("ACELINK_CONFIG_FALLBACK", "")
 
 
 def debug(msg):
-    print(f"[DEBUG] {msg}")
-    sys.stdout.flush()
+    print(f"[DEBUG] {msg}", file=sys.stderr)
+    sys.stderr.flush()
 
 
 async def main():
@@ -78,29 +83,48 @@ async def main():
         await client.connect()
 
         async def do_send_code():
-            sent = await client.send_code_request(phone)
-            code_type = type(sent.type).__name__
-            debug(f"Code sent via: {code_type}")
-            return sent.phone_code_hash, code_type
+            try:
+                sent = await client.send_code_request(phone)
+                code_type = type(sent.type).__name__
+                debug(f"Code sent via: {code_type}")
+                return sent.phone_code_hash, code_type
+            except FloodWaitError as e:
+                wait = e.seconds
+                debug(f"FloodWaitError: must wait {wait}s")
+                raise Exception(f"flood_wait:{wait}")
 
         if command == "login":
             if not await client.is_user_authorized():
-                phone_code_hash, code_type = await do_send_code()
-                print(
-                    json.dumps(
-                        {
-                            "status": "needs_code",
-                            "phone": phone,
-                            "phone_code_hash": phone_code_hash,
-                            "code_type": code_type,
-                        }
+                try:
+                    phone_code_hash, code_type = await do_send_code()
+                    print(
+                        json.dumps(
+                            {
+                                "status": "needs_code",
+                                "phone": phone,
+                                "phone_code_hash": phone_code_hash,
+                                "code_type": code_type,
+                            }
+                        )
                     )
-                )
+                except Exception as e:
+                    msg = str(e)
+                    if msg.startswith("flood_wait:"):
+                        wait = int(msg.split(":")[1])
+                        print(
+                            json.dumps(
+                                {"status": "error", "message": f"flood_wait:{wait}"}
+                            )
+                        )
+                    else:
+                        print(json.dumps({"status": "error", "message": msg}))
             else:
                 print(json.dumps({"status": "authorized"}))
 
         elif command == "request_sms":
-            # Try ResendCodeRequest first; if exhausted, cancel and start fresh.
+            # Strategy:
+            # 1. Try ResendCodeRequest with the existing hash (moves to next delivery method: App -> SMS -> Call)
+            # 2. If that fails (all methods exhausted), cancel and start completely fresh
             from telethon.tl.functions.auth import ResendCodeRequest, CancelCodeRequest
 
             phone_code_hash = command_obj.get("phoneCodeHash")
@@ -126,24 +150,27 @@ async def main():
                 debug(
                     f"ResendCodeRequest failed ({e}), cancelling and retrying fresh..."
                 )
+                # Cancel the current auth flow so we can start fresh
                 try:
                     await client(
                         CancelCodeRequest(
                             phone_number=phone, phone_code_hash=phone_code_hash
                         )
                     )
+                    debug("CancelCodeRequest succeeded")
                 except Exception as ce:
                     debug(f"CancelCodeRequest also failed: {ce}")
-                # Start a completely new code request (fresh session)
+                # Start a completely new code request
                 try:
-                    phone_code_hash, code_type = await do_send_code()
+                    new_hash, new_type = await do_send_code()
+                    debug(f"Fresh send_code_request type: {new_type}")
                     print(
                         json.dumps(
                             {
                                 "status": "needs_code",
                                 "phone": phone,
-                                "phone_code_hash": phone_code_hash,
-                                "code_type": code_type,
+                                "phone_code_hash": new_hash,
+                                "code_type": new_type,
                             }
                         )
                     )
@@ -158,6 +185,83 @@ async def main():
                 print(json.dumps({"status": "authorized"}))
             except Exception as e:
                 print(json.dumps({"status": "error", "message": str(e)}))
+
+        elif command == "qr_login":
+            # QR Login: generate a QR token and return immediately.
+            # The frontend will poll with "qr_check" to see if it was scanned.
+            if await client.is_user_authorized():
+                print(json.dumps({"status": "authorized"}))
+            else:
+                try:
+                    result = await client(
+                        ExportLoginTokenRequest(
+                            api_id=int(api_id),
+                            api_hash=api_hash,
+                            except_ids=[],
+                        )
+                    )
+
+                    if isinstance(result, LoginTokenSuccess):
+                        debug("QR: Already authorized via token")
+                        print(json.dumps({"status": "authorized"}))
+                    elif isinstance(result, LoginTokenMigrateTo):
+                        debug(f"QR: Need to migrate to DC{result.dc_id}")
+                        await client._switch_dc(result.dc_id)
+                        result2 = await client(
+                            ImportLoginTokenRequest(token=result.token)
+                        )
+                        if isinstance(result2, LoginTokenSuccess):
+                            print(json.dumps({"status": "authorized"}))
+                        else:
+                            print(
+                                json.dumps(
+                                    {
+                                        "status": "error",
+                                        "message": "Migration failed",
+                                    }
+                                )
+                            )
+                    elif isinstance(result, LoginToken):
+                        token_b64 = (
+                            base64.urlsafe_b64encode(result.token)
+                            .decode("ascii")
+                            .rstrip("=")
+                        )
+                        qr_url = f"tg://login?token={token_b64}"
+                        debug(f"QR token generated: {qr_url[:50]}...")
+                        # Return immediately so the frontend can show the QR
+                        print(json.dumps({"status": "qr_pending", "qr_url": qr_url}))
+                    else:
+                        print(
+                            json.dumps(
+                                {
+                                    "status": "error",
+                                    "message": f"Unexpected result: {type(result).__name__}",
+                                }
+                            )
+                        )
+                except FloodWaitError as e:
+                    print(
+                        json.dumps(
+                            {
+                                "status": "error",
+                                "message": f"flood_wait:{e.seconds}",
+                            }
+                        )
+                    )
+                except Exception as e:
+                    debug(f"QR login error: {e}")
+                    print(json.dumps({"status": "error", "message": str(e)}))
+
+        elif command == "qr_check":
+            # Check if QR was scanned (session authorized).
+            # Only checks is_user_authorized() -- does NOT generate a new token
+            # so the current QR stays valid.
+            if await client.is_user_authorized():
+                debug("QR check: authorized!")
+                print(json.dumps({"status": "authorized"}))
+            else:
+                print(json.dumps({"status": "qr_pending"}))
 
         elif command == "fetch_channels":
             if not await client.is_user_authorized():
