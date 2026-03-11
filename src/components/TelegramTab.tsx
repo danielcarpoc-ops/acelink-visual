@@ -356,9 +356,7 @@ const TelegramTab = ({
   useEffect(() => {
     if (phone && step === 'config' && !hasAutoConnected.current) {
       hasAutoConnected.current = true;
-      setTimeout(() => {
-        handleLogin();
-      }, 0);
+      // Don't auto-trigger phone login; let the user choose QR or phone manually
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phone, step]);
@@ -469,6 +467,24 @@ const TelegramTab = ({
         </h2>
         
         <div className="space-y-4">
+          {/* QR login — opción principal */}
+          <button 
+            onClick={startQrLogin}
+            disabled={isLoading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <QrCode size={18} />
+            {isLoading ? 'Conectando...' : 'Conectar con código QR'}
+          </button>
+
+          {/* Divider */}
+          <div className={`flex items-center gap-3 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>
+            <div className={`flex-1 h-px ${isDarkMode ? 'bg-[#333]' : 'bg-gray-200'}`} />
+            <span className="text-xs">o si no funciona el QR</span>
+            <div className={`flex-1 h-px ${isDarkMode ? 'bg-[#333]' : 'bg-gray-200'}`} />
+          </div>
+
+          {/* Phone login — opción alternativa */}
           <div>
             <label className={`block text-sm mb-1 flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}><Phone size={14}/> Número de Teléfono</label>
             <input 
@@ -484,18 +500,9 @@ const TelegramTab = ({
           <button 
             onClick={handleLogin}
             disabled={isLoading || (!!floodWaitUntil && Date.now() < floodWaitUntil)}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
+            className={`w-full py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${isDarkMode ? 'bg-[#333] hover:bg-[#444] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
           >
-            {isLoading ? 'Conectando...' : (floodSecondsLeft > 0 ? `Espera ${Math.ceil(floodSecondsLeft / 60)} min` : 'Conectar')}
-          </button>
-
-          <button 
-            onClick={startQrLogin}
-            disabled={isLoading}
-            className={`w-full py-2 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${isDarkMode ? 'bg-[#333] hover:bg-[#444] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
-          >
-            <QrCode size={16} />
-            Conectar con QR (sin código)
+            {isLoading ? 'Conectando...' : (floodSecondsLeft > 0 ? `Espera ${Math.ceil(floodSecondsLeft / 60)} min` : 'Conectar con número de teléfono')}
           </button>
           
           {statusMsg && <p className="text-red-400 text-sm mt-2">{statusMsg}</p>}
